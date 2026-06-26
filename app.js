@@ -53,7 +53,32 @@ const settingsForm = document.getElementById('settings-form');
 const setClientId = document.getElementById('setting-client-id');
 const setApiKey = document.getElementById('setting-api-key');
 const setCalendarId = document.getElementById('setting-calendar-id');
+const setSpreadsheetId = document.getElementById('setting-spreadsheet-id');
 const setWhitelist = document.getElementById('setting-whitelist');
+
+// 회원 목록 관리 DOM 관련
+const tabMembers = document.getElementById('tab-members');
+const membersViewCard = document.getElementById('members-view-card');
+const memberBackdrop = document.getElementById('member-backdrop');
+const closeMemberBtn = document.getElementById('close-member-btn');
+const btnCancelMember = document.getElementById('btn-cancel-member');
+const memberForm = document.getElementById('member-form');
+const memberModalTitle = document.getElementById('member-modal-title');
+const inpMemberId = document.getElementById('member-id');
+const inpMemberName = document.getElementById('member-name');
+const inpMemberPhone = document.getElementById('member-phone');
+const inpMemberJoined = document.getElementById('member-joined');
+const inpMemberCoach = document.getElementById('member-coach');
+const inpMemberMemo = document.getElementById('member-memo');
+const btnAddMember = document.getElementById('btn-add-member');
+const memberFilterInput = document.getElementById('member-filter-input');
+const btnMemberFilter = document.getElementById('btn-member-filter');
+const btnMemberRefresh = document.getElementById('btn-member-refresh');
+const membersLoading = document.getElementById('members-loading');
+const membersListContainer = document.getElementById('members-list-container');
+const membersCountSummary = document.getElementById('members-count-summary');
+const membersTbody = document.getElementById('members-tbody');
+
 
 // 일정 모달 관련
 const eventBackdrop = document.getElementById('event-backdrop');
@@ -170,6 +195,11 @@ function initializeGapiClient() {
           await gapi.client.load('calendar', 'v3');
         } catch (loadErr) {
           console.warn('gapi.client.load calendar v3 failed, relying on discoveryDocs:', loadErr);
+        }
+        try {
+          await gapi.client.load('sheets', 'v4');
+        } catch (loadErr) {
+          console.warn('gapi.client.load sheets v4 failed, relying on discoveryDocs:', loadErr);
         }
         gapiInited = true;
         console.log('GAPI Client Initialized');
@@ -1290,6 +1320,9 @@ function loadSavedSettingsToForm() {
   setClientId.value = CONFIG.getClientId();
   setApiKey.value = CONFIG.getApiKey();
   setCalendarId.value = CONFIG.getCalendarId();
+  if (setSpreadsheetId) {
+    setSpreadsheetId.value = CONFIG.getSpreadsheetId();
+  }
   setWhitelist.value = CONFIG.getWhitelist().join(', ');
 }
 
@@ -1300,6 +1333,7 @@ settingsForm.addEventListener('submit', (e) => {
     clientId: setClientId.value,
     apiKey: setApiKey.value,
     calendarId: setCalendarId.value,
+    spreadsheetId: setSpreadsheetId ? setSpreadsheetId.value : undefined,
     whitelistEmails: setWhitelist.value
   });
   
@@ -1434,19 +1468,21 @@ function setupEventListeners() {
   const retentionViewCard = document.getElementById('retention-view-card');
   const memberSearchViewCard = document.getElementById('member-search-view-card');
   
-  if (tabCalendar && tabLessonsCalendar && tabCoaches && tabRetention && tabMemberSearch && 
-      calendarViewCard && coachesViewCard && retentionViewCard && memberSearchViewCard) {
+  if (tabCalendar && tabLessonsCalendar && tabCoaches && tabRetention && tabMemberSearch && tabMembers &&
+      calendarViewCard && coachesViewCard && retentionViewCard && memberSearchViewCard && membersViewCard) {
     tabCalendar.addEventListener('click', () => {
       tabCalendar.classList.add('active');
       tabLessonsCalendar.classList.remove('active');
       tabCoaches.classList.remove('active');
       tabRetention.classList.remove('active');
       tabMemberSearch.classList.remove('active');
+      tabMembers.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'block';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'none';
       memberSearchViewCard.style.display = 'none';
+      membersViewCard.style.display = 'none';
       updateSidebarVisibility();
       refetchCalendarEvents(false);
     });
@@ -1457,11 +1493,13 @@ function setupEventListeners() {
       tabCoaches.classList.remove('active');
       tabRetention.classList.remove('active');
       tabMemberSearch.classList.remove('active');
+      tabMembers.classList.remove('active');
       document.body.classList.add('lessons-calendar-mode');
       calendarViewCard.style.display = 'block';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'none';
       memberSearchViewCard.style.display = 'none';
+      membersViewCard.style.display = 'none';
       updateSidebarVisibility();
       refetchCalendarEvents(false);
     });
@@ -1472,11 +1510,13 @@ function setupEventListeners() {
       tabLessonsCalendar.classList.remove('active');
       tabRetention.classList.remove('active');
       tabMemberSearch.classList.remove('active');
+      tabMembers.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'none';
       coachesViewCard.style.display = 'flex';
       retentionViewCard.style.display = 'none';
       memberSearchViewCard.style.display = 'none';
+      membersViewCard.style.display = 'none';
       updateSidebarVisibility();
     });
     
@@ -1486,11 +1526,13 @@ function setupEventListeners() {
       tabLessonsCalendar.classList.remove('active');
       tabCoaches.classList.remove('active');
       tabMemberSearch.classList.remove('active');
+      tabMembers.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'none';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'flex';
       memberSearchViewCard.style.display = 'none';
+      membersViewCard.style.display = 'none';
       updateSidebarVisibility();
       loadRetentionData();
     });
@@ -1501,11 +1543,13 @@ function setupEventListeners() {
       tabLessonsCalendar.classList.remove('active');
       tabCoaches.classList.remove('active');
       tabRetention.classList.remove('active');
+      tabMembers.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'none';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'none';
       memberSearchViewCard.style.display = 'flex';
+      membersViewCard.style.display = 'none';
       updateSidebarVisibility();
       
       // 시작일, 종료일 기본 날짜값 세팅 (오늘 기준 과거 3개월 ~ 미래 3개월)
@@ -1530,6 +1574,23 @@ function setupEventListeners() {
       const searchInput = document.getElementById('member-search-input');
       if (searchInput) searchInput.focus();
     });
+
+    tabMembers.addEventListener('click', () => {
+      tabMembers.classList.add('active');
+      tabCalendar.classList.remove('active');
+      tabLessonsCalendar.classList.remove('active');
+      tabCoaches.classList.remove('active');
+      tabRetention.classList.remove('active');
+      tabMemberSearch.classList.remove('active');
+      document.body.classList.remove('lessons-calendar-mode');
+      calendarViewCard.style.display = 'none';
+      coachesViewCard.style.display = 'none';
+      retentionViewCard.style.display = 'none';
+      memberSearchViewCard.style.display = 'none';
+      membersViewCard.style.display = 'flex';
+      updateSidebarVisibility();
+      loadMemberList();
+    });
   }
 
   // ESC 키를 눌렀을 때 활성화된 모달을 닫는 리스너 추가 (이벤트 전파 방지 적용)
@@ -1543,6 +1604,10 @@ function setupEventListeners() {
       }
       if (settingsBackdrop.classList.contains('active')) {
         closeModal(settingsBackdrop);
+        isModalClosed = true;
+      }
+      if (memberBackdrop && memberBackdrop.classList.contains('active')) {
+        closeModal(memberBackdrop);
         isModalClosed = true;
       }
       
@@ -2056,3 +2121,409 @@ if (memberSearchInput) {
     }
   });
 }
+
+// =========================================================================
+// 회원 목록 관리 (Google Sheets 연동 CRUD)
+// =========================================================================
+
+let cachedMembers = []; // 메모리 상에 캐시된 회원 목록 (행 수정/삭제 시 index 매핑용)
+
+// 1. 스프레드시트 '회원목록' 시트 유효성 검사 및 자동 생성
+async function checkOrCreateMemberSheet() {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) {
+    throw new Error('스프레드시트 ID가 설정되지 않았습니다.');
+  }
+
+  try {
+    // 스프레드시트 메타데이터를 가져와 시트 목록 확인
+    const response = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId
+    });
+    
+    const sheets = response.result.sheets || [];
+    const hasMemberSheet = sheets.some(s => s.properties.title === '회원목록');
+    
+    if (!hasMemberSheet) {
+      console.log("'회원목록' 시트가 없습니다. 시트를 새로 생성합니다.");
+      // '회원목록' 시트 추가 요청
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        resource: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: '회원목록'
+                }
+              }
+            }
+          ]
+        }
+      });
+      
+      // 헤더 추가
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: spreadsheetId,
+        range: '회원목록!A1:F1',
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [['ID', '이름', '연락처', '등록일', '담당강사', '메모']]
+        }
+      });
+      console.log("'회원목록' 시트 및 헤더 생성이 완료되었습니다.");
+    }
+  } catch (err) {
+    console.error('Error checking or creating member sheet:', err);
+    throw err;
+  }
+}
+
+// 2. 회원 목록 조회 (Read)
+async function loadMemberList() {
+  if (!membersLoading || !membersListContainer || !membersTbody) return;
+  
+  membersLoading.style.display = 'block';
+  membersListContainer.style.display = 'none';
+  
+  try {
+    await checkOrCreateMemberSheet();
+    
+    const spreadsheetId = CONFIG.getSpreadsheetId();
+    const response = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId,
+      range: '회원목록!A2:F1000'
+    });
+    
+    const rows = response.result.values || [];
+    cachedMembers = rows.map((row, index) => {
+      return {
+        rowIndex: index + 2, // 1-based index 이며 헤더가 1행이므로 +2
+        id: row[0] || '',
+        name: row[1] || '',
+        phone: row[2] || '',
+        joinedDate: row[3] || '',
+        coach: row[4] || '',
+        memo: row[5] || ''
+      };
+    }).filter(member => member.id !== ''); // 빈 행 제거
+    
+    renderMembersTable();
+  } catch (err) {
+    console.error('Error loading member list:', err);
+    alert('회원 목록을 불러오는 중 오류가 발생했습니다. Spreadsheet ID 및 권한을 확인해주세요.');
+    membersLoading.style.display = 'none';
+  }
+}
+
+// 3. 회원 목록 렌더링
+function renderMembersTable() {
+  if (!membersTbody || !membersLoading || !membersListContainer || !membersCountSummary) return;
+  
+  membersTbody.innerHTML = '';
+  
+  const query = (memberFilterInput ? memberFilterInput.value : '').trim().toLowerCase();
+  
+  const filteredMembers = cachedMembers.filter(member => {
+    if (!query) return true;
+    return member.name.toLowerCase().includes(query) || member.phone.toLowerCase().includes(query);
+  });
+  
+  if (filteredMembers.length === 0) {
+    membersCountSummary.textContent = '검색된 회원이 없습니다.';
+  } else {
+    membersCountSummary.textContent = `총 ${filteredMembers.length}명의 회원이 등록되어 있습니다.`;
+  }
+  
+  filteredMembers.forEach(member => {
+    const tr = document.createElement('tr');
+    
+    tr.innerHTML = `
+      <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(member.name)}</td>
+      <td><span class="member-phone-number">${escapeHtml(member.phone)}</span></td>
+      <td>${escapeHtml(member.joinedDate)}</td>
+      <td><span style="font-weight: 500; color: var(--color-primary);">${escapeHtml(member.coach || '(미지정)')}</span></td>
+      <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(member.memo)}">
+        ${escapeHtml(member.memo)}
+      </td>
+      <td style="text-align: center;">
+        <button class="members-action-btn edit" data-id="${member.id}" title="수정">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </button>
+        <button class="members-action-btn delete" data-id="${member.id}" title="삭제">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </td>
+    `;
+    
+    // 버튼 이벤트 바인딩
+    tr.querySelector('.members-action-btn.edit').addEventListener('click', () => {
+      openMemberFormForEdit(member.id);
+    });
+    
+    tr.querySelector('.members-action-btn.delete').addEventListener('click', () => {
+      confirmDeleteMember(member.id, member.name);
+    });
+    
+    membersTbody.appendChild(tr);
+  });
+  
+  membersLoading.style.display = 'none';
+  membersListContainer.style.display = 'block';
+}
+
+// 4. 회원 등록/수정 모달 열기 (신규)
+function openMemberFormForNew() {
+  if (!memberBackdrop || !memberForm || !memberModalTitle || !inpMemberId) return;
+  
+  memberModalTitle.textContent = '신규 회원 등록';
+  memberForm.reset();
+  inpMemberId.value = '';
+  
+  // 등록일 기본값 오늘로 세팅
+  if (inpMemberJoined) {
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    inpMemberJoined.value = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  }
+  
+  // 담당 강사 드롭다운 옵션 동적 갱신
+  populateCoachDropdown();
+  
+  openModal(memberBackdrop);
+}
+
+// 5. 회원 등록/수정 모달 열기 (수정)
+function openMemberFormForEdit(memberId) {
+  if (!memberBackdrop || !memberModalTitle || !inpMemberId || !inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberCoach || !inpMemberMemo) return;
+  
+  const member = cachedMembers.find(m => m.id === memberId);
+  if (!member) {
+    alert('회원 정보를 찾을 수 없습니다.');
+    return;
+  }
+  
+  memberModalTitle.textContent = '회원 정보 수정';
+  inpMemberId.value = member.id;
+  inpMemberName.value = member.name;
+  inpMemberPhone.value = member.phone;
+  inpMemberJoined.value = member.joinedDate;
+  inpMemberMemo.value = member.memo;
+  
+  // 담당 강사 드롭다운 갱신 후 선택값 복원
+  populateCoachDropdown();
+  inpMemberCoach.value = member.coach;
+  
+  openModal(memberBackdrop);
+}
+
+// 6. 강사 드롭다운 바인딩 헬퍼
+function populateCoachDropdown() {
+  if (!inpMemberCoach) return;
+  
+  // 첫 옵션(없음)을 제외하고 비우기
+  inpMemberCoach.innerHTML = '<option value="">(없음 / 미지정)</option>';
+  
+  // allCalendars 또는 사이드바의 체크박스에서 강사 목록을 추출
+  const coaches = [];
+  
+  // 캘린더 목록 컨테이너에서 강사 이름 파싱
+  const checkboxes = document.querySelectorAll('.calendar-checkbox-item input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    const coachName = cb.getAttribute('data-summary');
+    const isOther = cb.closest('.calendar-checkbox-item').classList.contains('is-other');
+    // 'is-other' 클래스가 없는 것이 강사 캘린더
+    if (coachName && !isOther && !coaches.includes(coachName)) {
+      coaches.push(coachName);
+    }
+  });
+  
+  // 만약 체크박스에서 추출되지 않는다면 allCalendars에서 백업
+  if (coaches.length === 0 && allCalendars) {
+    allCalendars.forEach(cal => {
+      // 강사 캘린더 판정 조건 (기본/마스터 캘린더가 아니거나 적절한 강사 이름인 경우)
+      if (cal.summary && cal.id !== CONFIG.getCalendarId() && cal.id !== 'primary') {
+        coaches.push(cal.summary);
+      }
+    });
+  }
+  
+  coaches.sort().forEach(coach => {
+    const option = document.createElement('option');
+    option.value = coach;
+    option.textContent = coach;
+    inpMemberCoach.appendChild(option);
+  });
+}
+
+// 7. 회원 저장 (Create & Update)
+async function saveMemberData(e) {
+  e.preventDefault();
+  
+  if (!inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberCoach || !inpMemberMemo) return;
+  
+  const memberId = inpMemberId.value.trim();
+  const memberName = inpMemberName.value.trim();
+  const memberPhone = inpMemberPhone.value.trim();
+  const memberJoined = inpMemberJoined.value.trim();
+  const memberCoach = inpMemberCoach.value;
+  const memberMemo = inpMemberMemo.value.trim();
+  
+  if (!memberName) {
+    alert('회원명을 입력해주세요.');
+    return;
+  }
+  
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  closeModal(memberBackdrop);
+  
+  if (membersLoading) membersLoading.style.display = 'block';
+  if (membersListContainer) membersListContainer.style.display = 'none';
+  
+  try {
+    if (!memberId) {
+      // 신규 등록 (Create)
+      const newId = 'MEM-' + Date.now();
+      const newRowValues = [[newId, memberName, memberPhone, memberJoined, memberCoach, memberMemo]];
+      
+      await gapi.client.sheets.spreadsheets.values.append({
+        spreadsheetId: spreadsheetId,
+        range: '회원목록!A1',
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: newRowValues
+        }
+      });
+      console.log('신규 회원이 성공적으로 등록되었습니다.');
+    } else {
+      // 기존 수정 (Update)
+      const member = cachedMembers.find(m => m.id === memberId);
+      if (!member) {
+        throw new Error('수정하려는 회원 데이터를 찾을 수 없습니다.');
+      }
+      
+      const rowIndex = member.rowIndex;
+      const updatedRowValues = [[memberId, memberName, memberPhone, memberJoined, memberCoach, memberMemo]];
+      
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: spreadsheetId,
+        range: `회원목록!A${rowIndex}:F${rowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: updatedRowValues
+        }
+      });
+      console.log('회원 정보가 성공적으로 수정되었습니다.');
+    }
+    
+    // 다시 로딩
+    await loadMemberList();
+  } catch (err) {
+    console.error('Error saving member data:', err);
+    alert('회원 정보를 저장하는 중 오류가 발생했습니다.');
+    if (membersLoading) membersLoading.style.display = 'none';
+    if (membersListContainer) membersListContainer.style.display = 'block';
+  }
+}
+
+// 8. 회원 삭제 컨펌 및 수행 (Delete)
+function confirmDeleteMember(memberId, memberName) {
+  if (confirm(`"${memberName}" 회원을 정말로 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`)) {
+    executeDeleteMember(memberId);
+  }
+}
+
+async function executeDeleteMember(memberId) {
+  const member = cachedMembers.find(m => m.id === memberId);
+  if (!member) {
+    alert('삭제하려는 회원 데이터를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const rowIndex = member.rowIndex;
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  
+  if (membersLoading) membersLoading.style.display = 'block';
+  if (membersListContainer) membersListContainer.style.display = 'none';
+  
+  try {
+    // 1. '회원목록' 시트의 고유 sheetId를 알아냅니다.
+    const spreadsheet = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId
+    });
+    const sheet = spreadsheet.result.sheets.find(s => s.properties.title === '회원목록');
+    if (!sheet) {
+      throw new Error("'회원목록' 시트를 찾을 수 없습니다.");
+    }
+    const sheetId = sheet.properties.sheetId;
+    
+    // 2. deleteDimension 요청을 통해 행을 도려냅니다.
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      resource: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex - 1, // 0-based index
+                endIndex: rowIndex // exclusive
+              }
+            }
+          }
+        ]
+      }
+    });
+    
+    console.log(`행 ${rowIndex}가 성공적으로 삭제되었습니다.`);
+    
+    // 다시 로딩
+    await loadMemberList();
+  } catch (err) {
+    console.error('Error deleting member:', err);
+    alert('회원을 삭제하는 중 오류가 발생했습니다.');
+    if (membersLoading) membersLoading.style.display = 'none';
+    if (membersListContainer) membersListContainer.style.display = 'block';
+  }
+}
+
+// HTML 이스케이프 헬퍼
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// 9. 회원 관리 이벤트 바인딩
+if (btnAddMember) {
+  btnAddMember.addEventListener('click', openMemberFormForNew);
+}
+if (closeMemberBtn) {
+  closeMemberBtn.addEventListener('click', () => closeModal(memberBackdrop));
+}
+if (btnCancelMember) {
+  btnCancelMember.addEventListener('click', () => closeModal(memberBackdrop));
+}
+if (memberForm) {
+  memberForm.addEventListener('submit', saveMemberData);
+}
+if (btnMemberFilter) {
+  btnMemberFilter.addEventListener('click', renderMembersTable);
+}
+if (memberFilterInput) {
+  memberFilterInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      renderMembersTable();
+    }
+  });
+  memberFilterInput.addEventListener('input', renderMembersTable); // 실시간 필터링
+}
+if (btnMemberRefresh) {
+  btnMemberRefresh.addEventListener('click', loadMemberList);
+}
+
