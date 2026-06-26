@@ -1,8 +1,21 @@
 // Google Calendar 및 OAuth 설정 관리
+let secrets = { clientId: '', apiKey: '', calendarId: 'heumhadas@gmail.com' };
+
+try {
+  const response = await fetch('./secrets.json');
+  if (response.ok) {
+    const data = await response.json();
+    secrets = { ...secrets, ...data };
+    console.log('로컬 secrets.json 설정을 성공적으로 로드했습니다.');
+  }
+} catch (err) {
+  console.log('로컬 secrets.json 파일이 없습니다. 수동 설정을 사용합니다.');
+}
+
 export const CONFIG = {
-  getClientId: () => localStorage.getItem('G_CLIENT_ID') || '',
-  getApiKey: () => localStorage.getItem('G_API_KEY') || '',
-  getCalendarId: () => localStorage.getItem('G_CALENDAR_ID') || 'primary',
+  getClientId: () => localStorage.getItem('G_CLIENT_ID') || secrets.clientId || '',
+  getApiKey: () => localStorage.getItem('G_API_KEY') || secrets.apiKey || '',
+  getCalendarId: () => localStorage.getItem('G_CALENDAR_ID') || secrets.calendarId || 'heumhadas@gmail.com',
   DISCOVERY_DOCS: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
   SCOPES: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
   
@@ -16,7 +29,7 @@ export const CONFIG = {
 export function saveConfig({ clientId, apiKey, calendarId, whitelistEmails }) {
   if (clientId !== undefined) localStorage.setItem('G_CLIENT_ID', clientId.trim());
   if (apiKey !== undefined) localStorage.setItem('G_API_KEY', apiKey.trim());
-  if (calendarId !== undefined) localStorage.setItem('G_CALENDAR_ID', calendarId.trim() || 'primary');
+  if (calendarId !== undefined) localStorage.setItem('G_CALENDAR_ID', calendarId.trim() || 'heumhadas@gmail.com');
   if (whitelistEmails !== undefined) {
     const emailList = whitelistEmails
       .split(',')
