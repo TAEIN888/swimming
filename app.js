@@ -2583,9 +2583,9 @@ if (btnMemberRefresh) {
 // =========================================================================
 
 const DEFAULT_TEMPLATES = {
-  'template-a': "[헤엄하다] 안녕하세요, {이름}님!\n내일({날짜}) {시간}에 {강사} 강사님과의 수영 수업이 예정되어 있습니다. 🏊‍♂️\n\n지각하지 않으시도록 시간 맞춰 참석 부탁드립니다. 감사합니다!",
-  'template-b': "[헤엄하다] 수영 강습 안내\n{이름}님, 내일 {시간} 수영 수업 안내입니다. 🏊\n\n준비물: 수영복, 수모, 수경, 샤워도구\n내일 뵙겠습니다. 즐거운 수업 준비해 보세요!",
-  'template-c': "[헤엄하다] 강습 알림\n내일 수업 안내: {이름}님 ({시간} 수업)\n\n내일 뵙겠습니다! 😊"
+  'template-a': "안녕하세요, 수영장 헤엄하다입니다.\n예약 일정 안내드립니다.\n* {월}/{일}({요일}) {시간}시 ({회차})\n* 수업시작 15분 전까지 센터에 도착해주시기를 부탁드립니다.\n이전 타임 고객님이 {시간-1}시 50분 수업 종료 직후 샤워실을 사용하기에 그 전에 수영복으로 환복을 완료하셔야 수업시작 전에 수영장에 미리 들어가 계실 수 있습니다.\n* 수영장 앞에 주차하실 때는 앞에서부터 주차를 부탁드리고, 앞에 차가 있을 경우 가능한 앞차와 가깝게 주차해 주시기를 부탁드립니다.\n* 수업 취소 및 변경은, 수업 시각 기준으로 이틀 전까지 부탁드립니다. 그 이후에 취소 및 변경하실 경우 횟수를 차감하고 있으니 취소 및 변경은 미리 말씀 부탁드립니다. 소규모 예약제로 운영되는 시스템상 취소 발생 시 다른 수업으로 대체하기가 어려워 양해 부탁드립니다.",
+  'template-b': "안녕하세요, 수영장 헤엄하다입니다.\n{이름}님, 내일 {시간}시 수업 안내입니다.\n준비물(수영복, 수모, 물안경)을 꼭 지참해 주세요. 🏊",
+  'template-c': "[헤엄하다] 내일 강습 알림\n대상: {이름}님 ({시간}시 수업)"
 };
 
 let notifierEvents = []; // 알림 생성 대상이 되는 내일의 일정 정보 목록
@@ -2645,12 +2645,16 @@ async function generateNotifications() {
     const start = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
     const end = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
     
-    // 활성 캘린더 ID 취득
-    const targetCalendarIds = Array.from(selectedCalendarIds);
+    // 활성 캘린더 중 수업 일정 캘린더(summary가 **헤엄하다_ 로 시작하는 것)만 필터링
+    const targetCalendarIds = Array.from(selectedCalendarIds).filter(calendarId => {
+      const calMeta = allCalendars.find(c => c.id === calendarId);
+      return calMeta && calMeta.summary && calMeta.summary.startsWith('**헤엄하다_');
+    });
+    
     if (targetCalendarIds.length === 0) {
       notifierLoading.style.display = 'none';
       notifierEmptyMsg.style.display = 'block';
-      notifierEmptyMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size: 1.5rem; margin-bottom: 8px; display: block; color: var(--color-primary);"></i>캘린더 목록에서 최소 하나의 강사를 체크해 주세요.';
+      notifierEmptyMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size: 1.5rem; margin-bottom: 8px; display: block; color: var(--color-primary);"></i>수업 일정 캘린더 강사를 캘린더 목록에서 최소 하나 체크해 주세요.';
       return;
     }
     
@@ -2726,6 +2730,13 @@ async function generateNotifications() {
         memberName = summary.trim();
       }
       
+      // 회차 파싱 시도 (예: [3회차] 홍길동 또는 홍길동 3회차 또는 3회)
+      let sessionInfo = '';
+      const sessionMatch = summary.match(/(\d+회차|\d+회)/);
+      if (sessionMatch) {
+        sessionInfo = sessionMatch[1];
+      }
+      
       // 시작 시간 구하기
       const startDateTime = evt.start.dateTime || evt.start.date;
       const startTimeObj = new Date(startDateTime);
@@ -2742,6 +2753,7 @@ async function generateNotifications() {
         phone: phoneNum,
         time: timeStr,
         date: targetDateStr,
+        session: sessionInfo,
         coach: item.coachName
       });
     });
@@ -2782,11 +2794,30 @@ function renderNotifierMessages() {
   }
   
   notifierEvents.forEach(item => {
+    // 날짜 파싱 (월, 일, 요일 추출)
+    const d = new Date(item.date);
+    const monthVal = d.getMonth() + 1;
+    const dateVal = d.getDate();
+    const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayVal = weekDays[d.getDay()];
+    
+    // 시간 정보 파싱
+    const hourVal = parseInt(item.time.split(':')[0], 10);
+    const prevHourVal = hourVal - 1;
+    
+    // 회차 정보
+    const sessionVal = item.session || '회차 정보 없음';
+
     // 템플릿 치환
     let messageText = templateRaw
       .replace(/{이름}/g, item.name)
       .replace(/{날짜}/g, formattedDate)
-      .replace(/{시간}/g, item.time)
+      .replace(/{월}/g, monthVal)
+      .replace(/{일}/g, dateVal)
+      .replace(/{요일}/g, dayVal)
+      .replace(/{시간}/g, hourVal)
+      .replace(/{시간-1}/g, prevHourVal)
+      .replace(/{회차}/g, sessionVal)
       .replace(/{강사}/g, item.coach);
       
     const card = document.createElement('div');
