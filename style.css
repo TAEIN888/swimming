@@ -988,6 +988,100 @@ body {
   font-size: 0.78rem;
 }
 
+/* 모바일 헤더 기본 스타일 (데스크톱에서는 숨김) */
+.mobile-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-color);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 999;
+}
+
+.mobile-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--color-primary);
+}
+
+.mobile-title {
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--text-main);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 모바일 닫기 버튼 기본 스타일 */
+.mobile-close-btn {
+  display: none;
+  background: rgba(15, 23, 42, 0.05);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-main);
+  font-size: 1rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.mobile-close-btn:hover {
+  background: rgba(15, 23, 42, 0.1);
+  transform: scale(1.05);
+}
+
+/* 사이드바 백드롭 (모바일에서 사이드바 열릴 때 뒷배경) */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(4px);
+  z-index: 1009;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.active {
+  display: block;
+  opacity: 1;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
   .stats-row {
@@ -996,29 +1090,211 @@ body {
 }
 
 @media (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+  }
+  
   .app-container {
     flex-direction: column;
+    padding-top: 60px; /* 모바일 헤더 높이만큼 띄움 */
+    height: 100vh;
     overflow-y: auto;
   }
+  
+  /* 사이드바를 슬라이드 메뉴 형태로 변경 */
   .sidebar {
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    padding: 1.25rem;
+    position: fixed;
+    top: 0;
+    left: -280px; /* 화면 밖으로 */
+    width: 280px;
+    height: 100vh;
+    border-right: 1px solid var(--border-color);
+    border-bottom: none;
+    z-index: 1010;
+    box-shadow: 12px 0 30px rgba(15, 23, 42, 0.1);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    display: flex !important; /* flex 강제 */
   }
-  .brand-section {
-    margin-bottom: 1rem;
+  
+  .sidebar.active {
+    left: 0; /* 슬라이드 인 */
   }
+  
   .sidebar-menu {
-    display: none;
+    display: block !important; /* 모바일에서도 노출 */
   }
+  
+  .brand-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .mobile-close-btn {
+    display: flex;
+  }
+  
   .main-content {
-    padding: 1.25rem;
+    padding: 1rem;
+    width: 100%;
+    overflow-x: hidden;
   }
+  
+  /* 탭 메뉴 가로 스크롤 대응 */
+  .tab-menu {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.25rem 0.25rem 0.5rem 0.25rem;
+    gap: 8px;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+  }
+  
+  .tab-menu::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .tab-menu::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.1);
+    border-radius: 10px;
+  }
+  
+  .tab-btn {
+    padding: 0.5rem 0.88rem;
+    font-size: 0.85rem;
+    flex-shrink: 0; /* 찌그러지지 않도록 */
+  }
+  
+  /* 통계 카드 1열 */
   .stats-row {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  /* 테이블 모바일 카드화 (members-table & retention-table) */
+  .members-table, .members-table thead, .members-table tbody, .members-table th, .members-table td, .members-table tr,
+  .retention-table, .retention-table thead, .retention-table tbody, .retention-table th, .retention-table td, .retention-table tr {
+    display: block;
+  }
+  
+  .members-table thead, .retention-table thead {
+    display: none; /* 헤더 숨김 */
+  }
+  
+  .members-table tr, .retention-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+    padding: 0.75rem;
+    box-shadow: 0 4px 6px rgba(15, 23, 42, 0.01);
+  }
+  
+  .members-table td, .retention-table td {
+    border: none;
+    position: relative;
+    padding-left: 40% !important;
+    text-align: right !important;
+    padding: 8px 12px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+    font-size: 0.85rem;
+  }
+  
+  .members-table td:last-child, .retention-table td:last-child {
+    border-bottom: none;
+  }
+  
+  .members-table td::before, .retention-table td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 35%;
+    white-space: nowrap;
+    text-align: left;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  
+  /* 관리 버튼 등 정렬 처리 */
+  .members-table td.member-table-actions {
+    text-align: center !important;
+    padding-left: 12px !important;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  
+  .members-table td.member-table-actions::before {
+    position: static;
+    transform: none;
+    width: auto;
+    margin-right: auto;
+  }
+  
+  /* 메모 컬럼은 길어지므로 가독성 대응 */
+  .member-table-memo {
+    text-align: left !important;
+    padding-left: 40% !important;
+    white-space: normal !important;
+    word-break: break-all;
+  }
+  
+  /* FullCalendar 모바일 최적화 */
+  .fc .fc-toolbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .fc .fc-toolbar-title {
+    font-size: 1.1rem !important;
+  }
+  
+  .fc .fc-button {
+    padding: 0.35rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* 모달 카드 모바일 최적화 */
+  .modal-card {
+    width: 95% !important;
+    max-height: 90vh !important;
+    margin: 1.5rem auto !important;
+    padding: 1.5rem 1.25rem !important;
+    overflow-y: auto;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  /* 알림 메시지 생성기 결과 카드 */
+  .notifier-card {
+    padding: 1rem !important;
+  }
+  
+  .notifier-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  .notifier-time-badge {
+    align-self: flex-start;
   }
 }
 

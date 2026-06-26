@@ -82,6 +82,12 @@ const membersListContainer = document.getElementById('members-list-container');
 const membersCountSummary = document.getElementById('members-count-summary');
 const membersTbody = document.getElementById('members-tbody');
 
+// 모바일 반응형 사이드바 토글 관련
+const btnSidebarToggle = document.getElementById('btn-sidebar-toggle');
+const btnSidebarClose = document.getElementById('btn-sidebar-close');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+const appSidebar = document.getElementById('app-sidebar');
+
 // 알림 메시지 생성기 DOM 관련
 const btnOpenNotifier = document.getElementById('btn-open-notifier');
 const notifierBackdrop = document.getElementById('notifier-backdrop');
@@ -1672,6 +1678,39 @@ function setupEventListeners() {
       }
     }
   }, true);
+
+  // 모바일 사이드바 토글 및 백드롭 이벤트
+  if (btnSidebarToggle && appSidebar && sidebarBackdrop) {
+    btnSidebarToggle.addEventListener('click', () => {
+      appSidebar.classList.add('active');
+      sidebarBackdrop.classList.add('active');
+    });
+  }
+  
+  const closeMobileSidebar = () => {
+    if (appSidebar && sidebarBackdrop) {
+      appSidebar.classList.remove('active');
+      sidebarBackdrop.classList.remove('active');
+    }
+  };
+  
+  if (btnSidebarClose) {
+    btnSidebarClose.addEventListener('click', closeMobileSidebar);
+  }
+  
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+  }
+
+  // 사이드바 내부 메뉴/설정/로그아웃 클릭 시 모바일 환경이면 사이드바 자동으로 닫기
+  const sidebarButtons = document.querySelectorAll('.sidebar-menu button, .sidebar-menu a, #btn-logout');
+  sidebarButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        closeMobileSidebar();
+      }
+    });
+  });
 }
 
 // 14. 강사별 재등록율 데이터 로드 및 계산
@@ -2127,13 +2166,13 @@ async function performMemberSearch() {
         row.style.borderBottom = '1px solid var(--border-color)';
         row.style.fontSize = '0.85rem';
         row.innerHTML = `
-          <td style="padding: 12px 16px;">
+          <td data-label="날짜/시간" style="padding: 12px 16px;">
             <div style="font-weight: 600; color: var(--text-main);">${formatDate(item.start)}</div>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${formatTime(item.start, item.end)}</div>
           </td>
-          <td style="padding: 12px 16px; font-weight: 600; color: var(--color-primary);">${item.coachName}</td>
-          <td style="padding: 12px 16px; color: var(--text-main); font-weight: 500;">${item.event.summary || '제목 없음'}</td>
-          <td style="padding: 12px 16px;">
+          <td data-label="강사" style="padding: 12px 16px; font-weight: 600; color: var(--color-primary);">${item.coachName}</td>
+          <td data-label="일정 제목" style="padding: 12px 16px; color: var(--text-main); font-weight: 500;">${item.event.summary || '제목 없음'}</td>
+          <td data-label="회차 정보" style="padding: 12px 16px;">
             <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-secondary); background-color: rgba(6, 182, 212, 0.08); padding: 2px 6px; border-radius: 4px;">
               ${item.sessionInfo}
             </span>
@@ -2313,25 +2352,25 @@ function renderMembersTable() {
     }
     
     tr.innerHTML = `
-      <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(member.name)}</td>
-      <td>${escapeHtml(member.gender || '남성')}</td>
-      <td>${escapeHtml(member.age ? member.age + '세' : '-')}</td>
-      <td>
+      <td data-label="이름" style="font-weight: 600; color: var(--text-main);">${escapeHtml(member.name)}</td>
+      <td data-label="성별">${escapeHtml(member.gender || '남성')}</td>
+      <td data-label="나이">${escapeHtml(member.age ? member.age + '세' : '-')}</td>
+      <td data-label="구분">
         <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-secondary); background-color: rgba(6, 182, 212, 0.06); padding: 2px 6px; border-radius: 4px;">
           ${escapeHtml(member.isAdult || '성인')}
         </span>
       </td>
-      <td><span class="member-phone-number">${escapeHtml(member.phone)}</span></td>
-      <td>${escapeHtml(member.joinedDate)}</td>
-      <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(member.memo)}">
+      <td data-label="연락처"><span class="member-phone-number">${escapeHtml(member.phone)}</span></td>
+      <td data-label="등록일">${escapeHtml(member.joinedDate)}</td>
+      <td data-label="메모" class="member-table-memo" title="${escapeHtml(member.memo)}">
         ${escapeHtml(member.memo)}
       </td>
-      <td>
+      <td data-label="상태">
         <span style="font-size: 0.75rem; font-weight: 700; color: ${statusBadgeColor}; background-color: ${statusBadgeBg}; padding: 2px 8px; border-radius: 20px;">
           ${escapeHtml(member.status || '등록')}
         </span>
       </td>
-      <td style="text-align: center;">
+      <td data-label="관리" style="text-align: center;" class="member-table-actions">
         <button class="members-action-btn edit" data-id="${member.id}" title="수정">
           <i class="fa-solid fa-pen-to-square"></i>
         </button>

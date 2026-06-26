@@ -47,14 +47,33 @@
 
   <!-- 2. 메인 대시보드 스크린 -->
   <div id="app-screen" class="app-container" style="display: none;">
+    <!-- 모바일 상단 헤더 -->
+    <header class="mobile-header">
+      <button id="btn-sidebar-toggle" class="mobile-toggle-btn">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="mobile-brand">
+        <img src="https://search.pstatic.net/common/?src=https%3A%2F%2Fldb-phinf.pexternal.net%2F20220118_125%2F1642434204174TEfSa_JPEG%2F21746C71-4923-4FA2-B59B-496197509C70.jpeg" onerror="this.src='https://ldb-phinf.pstatic.net/20220118_125/1642434204174TEfSa_JPEG/21746C71-4923-4FA2-B59B-496197509C70.jpeg'" alt="헤엄하다 로고" class="mobile-logo">
+        <span class="mobile-title">헤엄하다</span>
+      </div>
+      <div style="width: 40px;"></div> <!-- 정렬용 여백 -->
+    </header>
+
+    <!-- 사이드바 백드롭 (모바일) -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
     <!-- 사이드바 -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-sidebar">
       <div class="sidebar-top">
         <div class="brand-section">
           <div class="brand-icon">
             <img src="https://search.pstatic.net/common/?src=https%3A%2F%2Fldb-phinf.pstatic.net%2F20220118_125%2F1642434204174TEfSa_JPEG%2F21746C71-4923-4FA2-B59B-496197509C70.jpeg" alt="헤엄하다 로고">
           </div>
           <span class="brand-name">헤엄하다</span>
+          <!-- 모바일 사이드바 닫기 버튼 -->
+          <button id="btn-sidebar-close" class="mobile-close-btn">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         
         <!-- 사용자 정보 카드 -->
