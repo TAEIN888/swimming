@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>헤엄하다 - 수영장 일정 관리 시스템</title>
+  
+  <!-- FontAwesome & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- FullCalendar.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+  
+  <!-- Google API Loader (GSI for Auth, gapi for API requests) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+</head>
+<body>
+
+  <!-- 1. 로그인 스크린 -->
+  <div id="login-screen" class="auth-container">
+    <div class="glass-card auth-card">
+      <div class="auth-logo">
+        <img src="https://search.pstatic.net/common/?src=https%3A%2F%2Fldb-phinf.pstatic.net%2F20220118_125%2F1642434204174TEfSa_JPEG%2F21746C71-4923-4FA2-B59B-496197509C70.jpeg" alt="헤엄하다 로고">
+      </div>
+      <h1 class="auth-title">헤엄하다</h1>
+      <p class="auth-subtitle">수영장 일정 관리 시스템<br>지정된 강사 및 관리자 계정으로 로그인해 주세요.</p>
+      
+      <!-- 구글 로그인 및 에러 메시지 영역 -->
+      <div id="auth-error-banner" class="alert-banner" style="display: none;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="auth-error-msg">권한이 없는 계정입니다.</span>
+      </div>
+      
+      <button id="google-login-btn" class="btn btn-primary" style="width: 100%; gap: 10px; font-size: 1.05rem;">
+        <i class="fa-brands fa-google"></i> 구글 계정으로 로그인
+      </button>
+      
+      <div style="margin-top: 1.5rem;">
+        <button id="temp-setup-btn" class="btn btn-secondary" style="width: 100%; font-size: 0.85rem;">
+          <i class="fa-solid fa-sliders"></i> 초기 Google API 환경 설정
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 메인 대시보드 스크린 -->
+  <div id="app-screen" class="app-container" style="display: none;">
+    <!-- 사이드바 -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-section">
+          <div class="brand-icon">
+            <img src="https://search.pstatic.net/common/?src=https%3A%2F%2Fldb-phinf.pstatic.net%2F20220118_125%2F1642434204174TEfSa_JPEG%2F21746C71-4923-4FA2-B59B-496197509C70.jpeg" alt="헤엄하다 로고">
+          </div>
+          <span class="brand-name">헤엄하다</span>
+        </div>
+        
+        <!-- 사용자 정보 카드 -->
+        <div id="user-profile-card" class="profile-card">
+          <img id="user-avatar" class="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100" alt="Profile">
+          <div class="profile-info">
+            <h4 id="user-name" class="profile-name">관리자</h4>
+            <p id="user-email" class="profile-email">admin@heumhada.com</p>
+          </div>
+        </div>
+        
+        <!-- 사이드바 메뉴 -->
+        <nav class="sidebar-menu">
+          <h5 class="menu-section-title">일정 관리</h5>
+          <button id="btn-add-event" class="btn btn-primary" style="width: 100%; justify-content: flex-start; gap: 10px;">
+            <i class="fa-solid fa-plus"></i> 새 수업 일정 추가
+          </button>
+          
+          <h5 class="menu-section-title" style="margin-top: 1.5rem;">캘린더 선택</h5>
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <button type="button" id="btn-cal-select-all" class="btn btn-secondary" style="padding: 4px 6px; font-size: 0.72rem; flex: 1; border-radius: var(--radius-sm); font-weight: 500;">전체 선택</button>
+            <button type="button" id="btn-cal-deselect-all" class="btn btn-secondary" style="padding: 4px 6px; font-size: 0.72rem; flex: 1; border-radius: var(--radius-sm); font-weight: 500;">전체 해제</button>
+          </div>
+          <div id="calendar-list-container">
+            <div style="font-size: 0.75rem; color: var(--text-muted); padding: 4px 8px;">캘린더 목록을 불러오는 중...</div>
+          </div>
+
+          <h5 class="menu-section-title" style="margin-top: 1rem;">설정</h5>
+          <button id="btn-open-settings" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; gap: 10px;">
+            <i class="fa-solid fa-gears"></i> API 및 연동 설정
+          </button>
+        </nav>
+      </div>
+      
+      <div class="sidebar-bottom">
+        <button id="btn-logout" class="btn btn-danger" style="width: 100%; gap: 10px;">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> 로그아웃
+        </button>
+      </div>
+    </aside>
+
+    <!-- 메인 달력 콘텐츠 -->
+    <main class="main-content">
+      <!-- 구글 API 미설정 시 경고 배너 -->
+      <div id="api-warning-banner" class="setup-needed-banner" style="display: none;">
+        <span><i class="fa-solid fa-circle-info"></i> 구글 API 인증 값이 설정되지 않았습니다. 사이드바의 설정을 클릭하여 채워주세요.</span>
+        <button id="btn-setup-now" class="btn btn-secondary" style="padding: 0.4rem 1rem; font-size: 0.8rem;">설정하기</button>
+      </div>
+
+      <!-- 상단 탭 메뉴 -->
+      <div class="tab-menu">
+        <button id="tab-calendar" class="tab-btn active">
+          <i class="fa-solid fa-calendar-days"></i> 전체 일정 캘린더
+        </button>
+        <button id="tab-lessons-calendar" class="tab-btn">
+          <i class="fa-solid fa-calendar-check"></i> 수업 일정 캘린더
+        </button>
+        <button id="tab-coaches" class="tab-btn">
+          <i class="fa-solid fa-chalkboard-user"></i> 강사별 수업 현황
+        </button>
+        <button id="tab-retention" class="tab-btn">
+          <i class="fa-solid fa-chart-line"></i> 강사별 재등록율
+        </button>
+      </div>
+
+      <!-- 대시보드 통계 카드 영역 -->
+      <div class="stats-row">
+        <div class="stat-card glass-card">
+          <div class="stat-icon stat-icon-cyan">
+            <i class="fa-solid fa-calendar-day"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">오늘의 수업</span>
+            <span class="stat-value" id="stat-today-classes">0 건</span>
+          </div>
+        </div>
+        <div class="stat-card glass-card">
+          <div class="stat-icon stat-icon-blue">
+            <i class="fa-solid fa-users"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">관리 캘린더 수</span>
+            <span class="stat-value" id="stat-member-count">0 개</span>
+          </div>
+        </div>
+        <div class="stat-card glass-card">
+          <div class="stat-icon stat-icon-purple">
+            <i class="fa-solid fa-hourglass-half"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">이번주 수업</span>
+            <span class="stat-value" id="stat-weekly-classes">0 건</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1. 캘린더 카드 영역 -->
+      <div id="calendar-view-card" class="glass-card calendar-card" style="position: relative; display: block;">
+        <div id="calendar-container"></div>
+        <!-- 로딩 스피너 오버레이 -->
+        <div id="loading-spinner" class="loading-overlay" style="display: none;">
+          <div class="spinner-container">
+            <div class="double-bounce1"></div>
+            <div class="double-bounce2"></div>
+          </div>
+          <span style="margin-top: 1rem; font-size: 0.88rem; font-weight: 600; color: var(--color-primary);">구글 캘린더 일정을 불러오는 중...</span>
+        </div>
+      </div>
+
+      <!-- 2. 강사별 현황 카드 영역 (기본 숨김) -->
+      <div id="coaches-view-card" class="glass-card" style="display: none; flex: 1; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+          <h3 style="font-family: var(--font-title); font-weight: 700; font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chalkboard-user" style="color: var(--color-primary);"></i> 강사별 수업 현황
+          </h3>
+          <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;" id="coach-status-date">오늘의 일정 기준</span>
+        </div>
+        <div id="coaches-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+          <!-- 강사별 현황 카드가 JavaScript에 의해 동적으로 생성됩니다 -->
+        </div>
+      </div>
+
+      <!-- 3. 강사별 재등록율 카드 영역 (기본 숨김) -->
+      <div id="retention-view-card" class="glass-card" style="display: none; flex: 1; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+          <h3 style="font-family: var(--font-title); font-weight: 700; font-size: 1.3rem; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-line" style="color: var(--color-primary);"></i> 강사별 재등록율
+          </h3>
+          <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;" id="retention-status-period">최근 6개월 분석 기준</span>
+        </div>
+        
+        <!-- 로딩 스피너 -->
+        <div id="retention-loading" style="display: none; text-align: center; padding: 4rem;">
+          <div class="spinner-container" style="margin: 0 auto 1.5rem;">
+            <div class="double-bounce1"></div>
+            <div class="double-bounce2"></div>
+          </div>
+          <span style="font-size: 0.88rem; font-weight: 600; color: var(--color-primary);">과거 6개월치 수업 일정을 수집 및 분석 중입니다...</span>
+        </div>
+        
+        <div id="retention-content" style="display: none;">
+          <div id="retention-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem;">
+            <!-- 강사별 재등록율 카드가 JavaScript에 의해 동적으로 생성됩니다 -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 3. 설정 모달 (Settings Modal) -->
+  <div id="settings-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-gears"></i> 구글 API 연동 설정</h3>
+        <button id="close-settings-btn" class="close-btn">&times;</button>
+      </div>
+      <form id="settings-form">
+        <div class="form-group">
+          <label class="form-label" for="setting-client-id">OAuth Client ID</label>
+          <input type="text" id="setting-client-id" class="form-control" placeholder="123456789-abcdef.apps.googleusercontent.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="setting-api-key">API Key</label>
+          <input type="password" id="setting-api-key" class="form-control" placeholder="AIzaSy...">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="setting-calendar-id">Calendar ID</label>
+          <input type="text" id="setting-calendar-id" class="form-control" placeholder="primary (또는 특정 구글 캘린더 ID)">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="setting-whitelist">접근 허용 구글 이메일 (쉼표로 구분)</label>
+          <textarea id="setting-whitelist" class="form-control" rows="3" placeholder="owner@gmail.com, coach1@gmail.com"></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" id="btn-cancel-settings" class="btn btn-secondary">취소</button>
+          <button type="submit" class="btn btn-primary">저장하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. 일정 추가/수정 모달 (Event Modal) -->
+  <div id="event-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="event-modal-title">새 일정 추가</h3>
+        <button id="close-event-btn" class="close-btn">&times;</button>
+      </div>
+      <form id="event-form">
+        <input type="hidden" id="event-id">
+        <div class="form-row">
+          <div class="form-group" id="event-calendar-select-group">
+            <label class="form-label" for="event-calendar-id">담당 강사</label>
+            <select id="event-calendar-id" class="form-control" required>
+              <!-- 동적으로 생성된 강사 목록 옵션 -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-member-name">회원명</label>
+            <input type="text" id="event-member-name" class="form-control" placeholder="예: 김민수">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="event-title">수업명 (예: [고급] 강습)</label>
+          <input type="text" id="event-title" class="form-control" required placeholder="수업명을 입력하세요">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-start-date">시작일</label>
+            <input type="date" id="event-start-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-start-time">시작 시간</label>
+            <input type="time" id="event-start-time" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-end-date">종료일</label>
+            <input type="date" id="event-end-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-end-time">종료 시간</label>
+            <input type="time" id="event-end-time" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="event-color">구분 색상 (레인)</label>
+          <select id="event-color" class="form-control">
+            <option value="#06b6d4">1번 레인 (하늘색)</option>
+            <option value="#3b82f6">2번 레인 (파란색)</option>
+            <option value="#8b5cf6">3번 레인 (보라색)</option>
+            <option value="#ec4899">4번 레인 (핑크색)</option>
+            <option value="#f59e0b">개인 교습 (주황색)</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 2rem;">
+          <button type="button" id="btn-delete-event" class="btn btn-danger" style="display: none;">삭제</button>
+          <div style="display: flex; gap: 10px; margin-left: auto;">
+            <button type="button" id="btn-cancel-event" class="btn btn-secondary">취소</button>
+            <button type="submit" id="btn-save-event" class="btn btn-primary">저장</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main JavaScript File -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

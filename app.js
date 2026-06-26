@@ -1,0 +1,1602 @@
+import { CONFIG, saveConfig } from './config.js';
+
+// 애플리케이션 상태 관리
+let tokenClient;
+let gapiInited = false;
+let gisInited = false;
+let accessToken = null;
+let calendar = null;
+let currentUser = null;
+
+// 다중 캘린더 관리 상태
+let allCalendars = [];
+let selectedCalendarIds = new Set();
+let lastViewType = null;
+const googleEventsCache = new Map();
+
+// 캘린더 새로고침 및 캐시 초기화 헬퍼 함수
+function refetchCalendarEvents(clearCache = false) {
+  if (clearCache) {
+    googleEventsCache.clear();
+  }
+  if (calendar) {
+    calendar.refetchEvents();
+  }
+}
+
+// DOM 요소 참조
+const loginScreen = document.getElementById('login-screen');
+const appScreen = document.getElementById('app-screen');
+const googleLoginBtn = document.getElementById('google-login-btn');
+const tempSetupBtn = document.getElementById('temp-setup-btn');
+const apiWarningBanner = document.getElementById('api-warning-banner');
+const btnSetupNow = document.getElementById('btn-setup-now');
+const authErrorBanner = document.getElementById('auth-error-banner');
+const authErrorMsg = document.getElementById('auth-error-msg');
+
+// 사이드바 및 프로필 관련
+const userAvatar = document.getElementById('user-avatar');
+const userName = document.getElementById('user-name');
+const userEmail = document.getElementById('user-email');
+const btnAddEvent = document.getElementById('btn-add-event');
+const btnOpenSettings = document.getElementById('btn-open-settings');
+const btnLogout = document.getElementById('btn-logout');
+const calendarListContainer = document.getElementById('calendar-list-container');
+
+// 설정 모달 관련
+const settingsBackdrop = document.getElementById('settings-backdrop');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const btnCancelSettings = document.getElementById('btn-cancel-settings');
+const settingsForm = document.getElementById('settings-form');
+const setClientId = document.getElementById('setting-client-id');
+const setApiKey = document.getElementById('setting-api-key');
+const setCalendarId = document.getElementById('setting-calendar-id');
+const setWhitelist = document.getElementById('setting-whitelist');
+
+// 일정 모달 관련
+const eventBackdrop = document.getElementById('event-backdrop');
+const closeEventBtn = document.getElementById('close-event-btn');
+const btnCancelEvent = document.getElementById('btn-cancel-event');
+const btnDeleteEvent = document.getElementById('btn-delete-event');
+const eventForm = document.getElementById('event-form');
+const eventModalTitle = document.getElementById('event-modal-title');
+
+// 일정 입력 폼 필드
+const inpEventId = document.getElementById('event-id');
+const inpEventCalendarId = document.getElementById('event-calendar-id');
+const inpEventTitle = document.getElementById('event-title');
+const inpEventMemberName = document.getElementById('event-member-name');
+const inpEventStartDate = document.getElementById('event-start-date');
+const inpEventStartTime = document.getElementById('event-start-time');
+const inpEventEndDate = document.getElementById('event-end-date');
+const inpEventEndTime = document.getElementById('event-end-time');
+const inpEventColor = document.getElementById('event-color');
+
+// 초기 실행 및 스크립트 로드 대기
+window.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
+function initApp() {
+  setupEventListeners();
+  loadSavedSettingsToForm();
+  checkApiSetup();
+  
+  // Google SDK 로드 대기 후 초기화 실행
+  const checkGoogleSDKs = setInterval(() => {
+    if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
+      clearInterval(checkGoogleSDKs);
+      initializeGapiClient();
+      initializeGisClient();
+      
+      // 저장된 세션 복원 시도
+      attemptSessionRestore();
+    }
+  }, 100);
+}
+
+// 저장된 구글 로그인 세션 자동 복원
+async function attemptSessionRestore() {
+  const savedToken = sessionStorage.getItem('G_ACCESS_TOKEN');
+  const savedUser = sessionStorage.getItem('G_USER_INFO');
+  const savedTokenResponse = sessionStorage.getItem('G_TOKEN_RESPONSE');
+  
+  if (savedToken && savedUser && savedTokenResponse) {
+    console.log('기존 로그인 세션 복원 시도 중...');
+    const checkGapi = setInterval(async () => {
+      if (gapiInited) {
+        clearInterval(checkGapi);
+        try {
+          accessToken = savedToken;
+          currentUser = JSON.parse(savedUser);
+          gapi.client.setToken(JSON.parse(savedTokenResponse));
+          
+          hideAuthError();
+          updateProfileUI();
+          showDashboard();
+          
+          await fetchCalendarList();
+          initCalendar();
+          console.log('로그인 세션 복원 완료!');
+        } catch (err) {
+          console.warn('세션 복원 실패 (토큰 만료 가능성):', err);
+          clearSession();
+          showLoginScreen();
+        }
+      }
+    }, 100);
+  }
+}
+
+// 세션 스토리지 데이터 삭제
+function clearSession() {
+  sessionStorage.removeItem('G_ACCESS_TOKEN');
+  sessionStorage.removeItem('G_USER_INFO');
+  sessionStorage.removeItem('G_TOKEN_RESPONSE');
+  accessToken = null;
+  currentUser = null;
+}
+
+// 1. API 설정 여부 확인
+function checkApiSetup() {
+  const clientId = CONFIG.getClientId();
+  const apiKey = CONFIG.getApiKey();
+  
+  if (!clientId || !apiKey) {
+    apiWarningBanner.style.display = 'flex';
+    googleLoginBtn.disabled = true;
+    googleLoginBtn.innerHTML = `<i class="fa-solid fa-lock"></i> API 설정을 완료해 주세요`;
+  } else {
+    apiWarningBanner.style.display = 'none';
+    googleLoginBtn.disabled = false;
+    googleLoginBtn.innerHTML = `<i class="fa-brands fa-google"></i> 구글 계정으로 로그인`;
+  }
+}
+
+// 2. GAPI 클라이언트 초기화 (캘린더 API 로드)
+function initializeGapiClient() {
+  gapi.load('client', async () => {
+    try {
+      const apiKey = CONFIG.getApiKey();
+      if (apiKey) {
+        await gapi.client.init({
+          apiKey: apiKey,
+          discoveryDocs: CONFIG.DISCOVERY_DOCS,
+        });
+        try {
+          await gapi.client.load('calendar', 'v3');
+        } catch (loadErr) {
+          console.warn('gapi.client.load calendar v3 failed, relying on discoveryDocs:', loadErr);
+        }
+        gapiInited = true;
+        console.log('GAPI Client Initialized');
+      }
+    } catch (err) {
+      console.error('Error initializing GAPI client:', err);
+    }
+  });
+}
+
+// 3. GIS (Google Identity Services) 초기화
+function initializeGisClient() {
+  try {
+    const clientId = CONFIG.getClientId();
+    if (clientId) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: CONFIG.SCOPES,
+        callback: handleAuthCallback,
+      });
+      gisInited = true;
+      console.log('GIS Client Initialized');
+    }
+  } catch (err) {
+    console.error('Error initializing GIS client:', err);
+  }
+}
+
+// 4. 인증 콜백 핸들러
+async function handleAuthCallback(tokenResponse) {
+  if (tokenResponse.error !== undefined) {
+    showAuthError(`로그인 오류: ${tokenResponse.error}`);
+    return;
+  }
+  
+  accessToken = tokenResponse.access_token;
+  gapi.client.setToken(tokenResponse);
+  
+  // 로그인 유저 정보 요청
+  try {
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    if (!response.ok) throw new Error('사용자 정보를 가져올 수 없습니다.');
+    
+    currentUser = await response.json();
+    
+    // 이메일 권한 필터링 (화이트리스트 검사)
+    const whitelist = CONFIG.getWhitelist();
+    const userEmailAddr = currentUser.email.toLowerCase();
+    
+    if (whitelist.length > 0 && !whitelist.includes(userEmailAddr)) {
+      showAuthError(`허가되지 않은 계정(${userEmailAddr})입니다. 관리자에게 문의하세요.`);
+      // 토큰 파기
+      google.accounts.oauth2.revokeToken(accessToken, () => {});
+      accessToken = null;
+      return;
+    }
+    
+    // 정상 로그인 성공 처리
+    hideAuthError();
+    updateProfileUI();
+    showDashboard();
+    
+    // 세션 유지용 스토리지 저장
+    sessionStorage.setItem('G_ACCESS_TOKEN', accessToken);
+    sessionStorage.setItem('G_USER_INFO', JSON.stringify(currentUser));
+    sessionStorage.setItem('G_TOKEN_RESPONSE', JSON.stringify(tokenResponse));
+    
+    // 다중 캘린더 목록 조회 및 필터 구성
+    await fetchCalendarList();
+    
+    initCalendar();
+    
+  } catch (err) {
+    showAuthError(err.message);
+  }
+}
+
+// 5. 다중 캘린더 목록 가져오기 및 UI 렌더링
+async function fetchCalendarList() {
+  calendarListContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); padding: 4px 8px;">목록을 불러오는 중...</div>';
+  inpEventCalendarId.innerHTML = '';
+  selectedCalendarIds.clear();
+  
+  try {
+    // GAPI 라이브러리 탑재 여부 검증
+    if (typeof gapi === 'undefined' || !gapi.client) {
+      throw new Error('Google API 클라이언트 라이브러리가 로드되지 않았습니다. 페이지를 새로고침해 주세요.');
+    }
+    
+    // GAPI 클라이언트 초기화 대기 및 캘린더 로딩 재시도
+    if (!gapiInited) {
+      console.log('GAPI가 아직 초기화되지 않아 캘린더 API 로딩을 시도합니다.');
+      try {
+        const apiKey = CONFIG.getApiKey();
+        await gapi.client.init({
+          apiKey: apiKey,
+          discoveryDocs: CONFIG.DISCOVERY_DOCS,
+        });
+        await gapi.client.load('calendar', 'v3');
+        gapiInited = true;
+      } catch (initErr) {
+        throw new Error(`Google API 초기화 실패: ${initErr.message || JSON.stringify(initErr)}`);
+      }
+    }
+
+    if (!gapi.client.calendar) {
+      console.log('gapi.client.calendar가 누락되어 명시적으로 다시 로드합니다.');
+      await gapi.client.load('calendar', 'v3');
+    }
+    
+    const response = await gapi.client.calendar.calendarList.list();
+    allCalendars = response.result.items || [];
+    
+    calendarListContainer.innerHTML = '';
+    
+    // 두 그룹을 보관할 엘리먼트 생성
+    const myGroupTitle = document.createElement('div');
+    myGroupTitle.className = 'calendar-group-title is-my';
+    myGroupTitle.style.cssText = 'font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; padding: 0 4px;';
+    myGroupTitle.textContent = '내 캘린더';
+    
+    const myGroupList = document.createElement('div');
+    myGroupList.className = 'calendar-group-list is-my';
+    myGroupList.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+    
+    const otherGroupTitle = document.createElement('div');
+    otherGroupTitle.className = 'calendar-group-title is-other';
+    otherGroupTitle.style.cssText = 'font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-top: 14px; margin-bottom: 6px; padding: 0 4px;';
+    otherGroupTitle.textContent = '다른 캘린더';
+    
+    const otherGroupList = document.createElement('div');
+    otherGroupList.className = 'calendar-group-list is-other';
+    otherGroupList.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+    
+    // 캘린더 정렬 (기본 기본형 캘린더 우선)
+    allCalendars.sort((a, b) => {
+      if (a.primary) return -1;
+      if (b.primary) return 1;
+      const nameA = a.summary || '';
+      const nameB = b.summary || '';
+      return nameA.localeCompare(nameB);
+    });
+    
+    allCalendars.forEach(cal => {
+      // 쓰기 권한 여부로 '내 캘린더'와 '다른 캘린더' 구분
+      const isMyCal = cal.accessRole === 'owner' || cal.accessRole === 'writer';
+      
+      const isInstructorCal = cal.summary && cal.summary.startsWith('**헤엄하다_');
+      const item = document.createElement('label');
+      item.className = `calendar-checkbox-item ${isInstructorCal ? 'is-instructor' : 'is-other'}`;
+      
+      const color = cal.backgroundColor || '#3b82f6';
+      
+      // 내 캘린더는 기본 선택(checked), 다른 캘린더는 선택 해제(unchecked)
+      const isChecked = isMyCal;
+      if (isChecked) {
+        selectedCalendarIds.add(cal.id);
+      }
+      
+      item.innerHTML = `
+        <input type="checkbox" id="cal-check-${cal.id}" data-id="${cal.id}" data-is-my-cal="${isMyCal}" ${isChecked ? 'checked' : ''} style="cursor: pointer;">
+        <span class="calendar-checkbox-color" style="background-color: ${color};"></span>
+        <span class="calendar-checkbox-label" title="${cal.summary}">${cal.summary}</span>
+      `;
+      
+      const checkbox = item.querySelector('input');
+      checkbox.addEventListener('change', (e) => {
+        const calId = e.target.getAttribute('data-id');
+        if (e.target.checked) {
+          selectedCalendarIds.add(calId);
+        } else {
+          selectedCalendarIds.delete(calId);
+        }
+        refetchCalendarEvents(false);
+      });
+      
+      if (isMyCal) {
+        myGroupList.appendChild(item);
+        
+        // 글쓰기 권한이 있고 '**헤엄하다_' 로 시작하는 강사 캘린더인 경우 드롭다운 목록에 추가
+        if (cal.summary && cal.summary.startsWith('**헤엄하다_')) {
+          const option = document.createElement('option');
+          option.value = cal.id;
+          option.textContent = cal.summary.replace('**헤엄하다_', '');
+          inpEventCalendarId.appendChild(option);
+        }
+      } else {
+        otherGroupList.appendChild(item);
+      }
+    });
+    
+    // 각각 리스트가 있을 때만 화면에 렌더링
+    if (myGroupList.children.length > 0) {
+      calendarListContainer.appendChild(myGroupTitle);
+      calendarListContainer.appendChild(myGroupList);
+    }
+    
+    if (otherGroupList.children.length > 0) {
+      calendarListContainer.appendChild(otherGroupTitle);
+      calendarListContainer.appendChild(otherGroupList);
+    }
+    
+    if (inpEventCalendarId.options.length === 0) {
+      const option = document.createElement('option');
+      option.value = 'primary';
+      option.textContent = '기본 캘린더 (쓰기 권한 없음)';
+      inpEventCalendarId.appendChild(option);
+    }
+    
+    updateSidebarVisibility();
+    
+  } catch (err) {
+    console.error('Error fetching calendar list:', err);
+    let errMsg = err.message || '';
+    if (err.result && err.result.error) {
+      errMsg = err.result.error.message;
+    } else if (typeof err === 'object') {
+      errMsg = JSON.stringify(err);
+    }
+    calendarListContainer.innerHTML = `<div style="font-size: 0.75rem; color: #ef4444; padding: 4px 8px; line-height: 1.4;">로딩 실패:<br>${errMsg}</div>`;
+  }
+}
+
+// 사이드바의 캘린더 그룹 가시성을 관리하는 함수
+function updateSidebarVisibility() {
+  const isLessonsOnly = document.body.classList.contains('lessons-calendar-mode');
+  
+  const myTitle = calendarListContainer.querySelector('.calendar-group-title.is-my');
+  const myList = calendarListContainer.querySelector('.calendar-group-list.is-my');
+  const otherTitle = calendarListContainer.querySelector('.calendar-group-title.is-other');
+  const otherList = calendarListContainer.querySelector('.calendar-group-list.is-other');
+  
+  const groups = [
+    { title: myTitle, list: myList },
+    { title: otherTitle, list: otherList }
+  ];
+  
+  groups.forEach(group => {
+    if (!group.title || !group.list) return;
+    
+    if (isLessonsOnly) {
+      // 수업 일정 모드일 때는 강사 캘린더가 1개 이상 있는 그룹만 표시
+      const hasInstructor = Array.from(group.list.querySelectorAll('.calendar-checkbox-item'))
+        .some(item => item.classList.contains('is-instructor'));
+      
+      if (hasInstructor) {
+        group.title.style.display = 'block';
+        group.list.style.display = 'flex';
+      } else {
+        group.title.style.display = 'none';
+        group.list.style.display = 'none';
+      }
+    } else {
+      // 일반 모드일 때는 그룹 리스트에 자식이 있으면 무조건 표시
+      if (group.list.children.length > 0) {
+        group.title.style.display = 'block';
+        group.list.style.display = 'flex';
+      } else {
+        group.title.style.display = 'none';
+        group.list.style.display = 'none';
+      }
+    }
+  });
+}
+
+// UI 갱신 관련 함수들
+function showAuthError(msg) {
+  authErrorMsg.textContent = msg;
+  authErrorBanner.style.display = 'flex';
+}
+
+function hideAuthError() {
+  authErrorBanner.style.display = 'none';
+}
+
+function updateProfileUI() {
+  if (currentUser) {
+    userAvatar.src = currentUser.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100';
+    userName.textContent = currentUser.name || '관리자';
+    userEmail.textContent = currentUser.email;
+  }
+}
+
+function showDashboard() {
+  loginScreen.style.display = 'none';
+  appScreen.style.display = 'flex';
+}
+
+function showLoginScreen() {
+  appScreen.style.display = 'none';
+  loginScreen.style.display = 'flex';
+}
+
+// 6. 달력 초기화
+function initCalendar() {
+  const calendarEl = document.getElementById('calendar-container');
+  
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay'
+    },
+    locale: 'ko',
+    timeZone: 'local',
+    editable: true,
+    selectable: true,
+    eventDisplay: 'block',   // 모든 일정을 꽉 찬 색상 블록(바 형태)으로 강제 적용
+    dayMaxEvents: 6,         // 하루에 보여줄 최대 일정 수 (넘어가면 '+더보기' 버튼 제공)
+    allDayText: '종일',
+    events: fetchGoogleEvents,
+    eventContent: renderEventContent,
+    eventClick: handleEventClick,
+    select: handleDateSelect,
+    eventDrop: handleEventDropOrResize,
+    eventResize: handleEventDropOrResize,
+    datesSet: function(info) {
+      const currentViewType = info.view.type;
+      if (lastViewType && lastViewType !== currentViewType) {
+        lastViewType = currentViewType;
+        refetchCalendarEvents(false); // 뷰 타입 변경 시 네트워크 요청 없이 로컬 캐시 재사용하여 병합/비병합 처리
+      } else {
+        lastViewType = currentViewType;
+      }
+    },
+    eventDidMount: function(info) {
+      const isTimeGrid = calendar && calendar.view && calendar.view.type.startsWith('timeGrid');
+      if (!isTimeGrid || info.event.extendedProps.isMerged) {
+        info.el.style.backgroundColor = 'transparent';
+        info.el.style.border = 'none';
+        info.el.style.boxShadow = 'none';
+        return;
+      }
+      const color = info.event.backgroundColor || '#6366f1';
+      info.el.style.setProperty('--event-color', color);
+      let r = 99, g = 102, b = 241;
+      if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        if (hex.length === 3) {
+          r = parseInt(hex[0] + hex[0], 16);
+          g = parseInt(hex[1] + hex[1], 16);
+          b = parseInt(hex[2] + hex[2], 16);
+        } else if (hex.length === 6) {
+          r = parseInt(hex.substring(0, 2), 16);
+          g = parseInt(hex.substring(2, 4), 16);
+          b = parseInt(hex.substring(4, 6), 16);
+        }
+      } else if (color.startsWith('rgb')) {
+        const rgbVals = color.match(/\d+/g);
+        if (rgbVals && rgbVals.length >= 3) {
+          r = parseInt(rgbVals[0], 10);
+          g = parseInt(rgbVals[1], 10);
+          b = parseInt(rgbVals[2], 10);
+        }
+      }
+      info.el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.12)`;
+      info.el.style.borderLeft = `3px solid ${color}`;
+      info.el.style.borderColor = 'transparent';
+    },
+    loading: function(isLoading) {
+      const spinner = document.getElementById('loading-spinner');
+      if (spinner) {
+        spinner.style.display = isLoading ? 'flex' : 'none';
+      }
+    }
+  });
+  
+  calendar.render();
+}
+
+// 7. 다중 캘린더로부터 병렬적으로 이벤트 로드 및 병합
+async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
+  const isLessonsOnly = document.body.classList.contains('lessons-calendar-mode');
+  
+  let targetIds = Array.from(selectedCalendarIds);
+  if (isLessonsOnly) {
+    targetIds = targetIds.filter(calendarId => {
+      const calMeta = allCalendars.find(c => c.id === calendarId);
+      const calName = calMeta ? calMeta.summary || '' : '';
+      return calName.startsWith('**헤엄하다_');
+    });
+  }
+  
+  if (targetIds.length === 0) {
+    successCallback([]);
+    return;
+  }
+  
+  try {
+    const fetchPromises = targetIds.map(async (calendarId) => {
+      // 캘린더 고유 컬러 찾기
+      const calMeta = allCalendars.find(c => c.id === calendarId);
+      const calColor = calMeta ? calMeta.backgroundColor : '#3b82f6';
+      
+      const cacheKey = `${calendarId}_${fetchInfo.startStr}_${fetchInfo.endStr}`;
+      if (googleEventsCache.has(cacheKey)) {
+        return googleEventsCache.get(cacheKey);
+      }
+      
+      try {
+        const response = await gapi.client.calendar.events.list({
+          calendarId: calendarId,
+          timeMin: fetchInfo.start.toISOString(),
+          timeMax: fetchInfo.end.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+        
+        const items = response.result.items || [];
+        
+        const parsed = items.map(gEvent => {
+          const start = gEvent.start.dateTime || gEvent.start.date;
+          const end = gEvent.end.dateTime || gEvent.end.date;
+          
+          let memberName = '';
+          let coachName = '';
+          if (gEvent.description) {
+            const memberMatch = gEvent.description.match(/회원:\s*(.*)/);
+            const coachMatch = gEvent.description.match(/강사:\s*(.*)/);
+            if (memberMatch) memberName = memberMatch[1];
+            if (coachMatch) coachName = coachMatch[1];
+            
+            // 호환성 처리: 기존에 저장된 '담당/회원: [value]' 포맷 파싱
+            if (!memberMatch && !coachMatch) {
+              const oldMatch = gEvent.description.match(/담당\/회원:\s*(.*)/);
+              if (oldMatch) {
+                const oldVal = oldMatch[1];
+                if (oldVal.includes('/')) {
+                  const parts = oldVal.split('/');
+                  memberName = parts[0].trim();
+                  coachName = parts[1].trim();
+                } else {
+                  memberName = oldVal.trim();
+                }
+              }
+            }
+          }
+          
+          // 개별 이벤트 커스텀 색상(colorId)이 설정되어 있으면 적용하고, 없으면 캘린더 자체 대표색 사용
+          let eventColor = calColor;
+          if (gEvent.colorId) {
+            if (gEvent.colorId === '7') eventColor = '#06b6d4'; // 1번 레인
+            else if (gEvent.colorId === '4') eventColor = '#8b5cf6'; // 3번 레인
+            else if (gEvent.colorId === '11') eventColor = '#ec4899'; // 4번 레인
+            else if (gEvent.colorId === '5') eventColor = '#f59e0b'; // 개인 교습
+          }
+          
+          return {
+            id: gEvent.id,
+            title: gEvent.summary,
+            start: start,
+            end: end,
+            backgroundColor: eventColor,
+            borderColor: eventColor,
+            extendedProps: {
+              memberName: memberName,
+              coachName: coachName,
+              colorVal: eventColor,
+              googleColorId: gEvent.colorId || '',
+              calendarId: calendarId // 삭제/수정/드래그앤드롭 시 정확한 대상을 지목하기 위해 보관
+            }
+          };
+        });
+        
+        googleEventsCache.set(cacheKey, parsed);
+        return parsed;
+      } catch (err) {
+        console.warn(`캘린더 ${calendarId}의 일정을 불러오지 못했습니다. (권한 부족 등)`, err);
+        return [];
+      }
+    });
+    
+    const results = await Promise.all(fetchPromises);
+    const mergedEvents = results.flat();
+    
+    // 대시보드 실시간 통계 업데이트
+    updateDashboardStats(mergedEvents);
+    
+    // 주간/일간 시간축 뷰(timeGrid)인 경우 동일 시간대 일정을 하나로 묶기
+    const viewType = (this && this.view) ? this.view.type : (calendar && calendar.view ? calendar.view.type : '');
+    const isTimeGrid = viewType.startsWith('timeGrid');
+    const finalEvents = [];
+    
+    if (isTimeGrid) {
+      const grouped = {};
+      mergedEvents.forEach(evt => {
+        const startMs = new Date(evt.start).getTime();
+        const endMs = new Date(evt.end).getTime();
+        const key = `${startMs}_${endMs}`;
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(evt);
+      });
+      
+      Object.keys(grouped).forEach(key => {
+        const group = grouped[key];
+        if (group.length === 1) {
+          finalEvents.push(group[0]);
+        } else {
+          const first = group[0];
+          finalEvents.push({
+            id: `merged_${key}`,
+            title: `${group.length}개 수업`,
+            start: first.start,
+            end: first.end,
+            editable: false, // 병합된 일정은 개별 드래그 비활성화
+            backgroundColor: 'transparent',
+            borderColor: 'transparent',
+            extendedProps: {
+              isMerged: true,
+              subEvents: group,
+              calendarId: first.extendedProps.calendarId
+            }
+          });
+        }
+      });
+    } else {
+      finalEvents.push(...mergedEvents);
+    }
+    
+    successCallback(finalEvents);
+  } catch (err) {
+    console.error('Error fetching google events:', err);
+    failureCallback(err);
+  }
+}
+
+// 대시보드 통계 카드 계산 및 UI 갱신 함수
+function updateDashboardStats(events) {
+  const today = new Date();
+  const pad = (num) => String(num).padStart(2, '0');
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  
+  // 캘린더명이 '**헤엄하다_' 로 시작하는 일정만 골라냅니다.
+  const filteredEvents = events.filter(e => {
+    const calMeta = allCalendars.find(c => c.id === e.extendedProps.calendarId);
+    const calName = calMeta ? calMeta.summary || '' : '';
+    return calName.startsWith('**헤엄하다_');
+  });
+  
+  // 1. 오늘의 수업 건수 계산
+  const todayClasses = filteredEvents.filter(e => {
+    const startLocalDate = e.start.split('T')[0];
+    return startLocalDate === todayStr;
+  });
+  
+  // 2. 이번주 수업 건수 계산 (일요일 ~ 토요일 기준)
+  const curr = new Date();
+  const first = curr.getDate() - curr.getDay(); // 이번주 일요일
+  const last = first + 6; // 이번주 토요일
+  
+  const firstday = new Date(new Date(curr).setDate(first));
+  const lastday = new Date(new Date(curr).setDate(last));
+  firstday.setHours(0, 0, 0, 0);
+  lastday.setHours(23, 59, 59, 999);
+  
+  const weeklyClasses = filteredEvents.filter(e => {
+    const eventDate = new Date(e.start);
+    return eventDate >= firstday && eventDate <= lastday;
+  });
+  
+  // 3. 실제 관리하는 회원 캘린더 수 계산 ('**헤엄하다_' 로 시작하는 것만)
+  const actualMemberCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
+  
+  // UI 요소 반영
+  document.getElementById('stat-today-classes').textContent = `${todayClasses.length} 건`;
+  document.getElementById('stat-weekly-classes').textContent = `${weeklyClasses.length} 건`;
+  document.getElementById('stat-member-count').textContent = `${actualMemberCalendars.length} 개`;
+
+  // 강사별 현황 뷰 갱신
+  renderCoachStatusView(filteredEvents);
+}
+
+// 강사별 현황 대시보드 카드 생성 및 렌더링 함수
+function renderCoachStatusView(events) {
+  const coachesGrid = document.getElementById('coaches-grid');
+  const coachStatusDate = document.getElementById('coach-status-date');
+  if (!coachesGrid || !coachStatusDate) return;
+  
+  const today = new Date();
+  coachStatusDate.textContent = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일 기준`;
+  
+  coachesGrid.innerHTML = '';
+  
+  // 강사 캘린더 추출 ('**헤엄하다_' 로 시작하는 목록)
+  const coachCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
+  
+  if (coachCalendars.length === 0) {
+    coachesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem; font-weight: 500;">연동된 강사 캘린더 목록이 없습니다.</div>';
+    return;
+  }
+  
+  // 이번주 날짜 범위 산출
+  const curr = new Date();
+  const first = curr.getDate() - curr.getDay(); // 이번주 일요일
+  const last = first + 6; // 이번주 토요일
+  const startOfWeek = new Date(new Date(curr).setDate(first));
+  const endOfWeek = new Date(new Date(curr).setDate(last));
+  startOfWeek.setHours(0, 0, 0, 0);
+  endOfWeek.setHours(23, 59, 59, 999);
+  
+  coachCalendars.forEach(cal => {
+    const coachName = cal.summary.replace('**헤엄하다_', '');
+    const calColor = cal.backgroundColor || '#3b82f6';
+    
+    // 해당 강사의 전체 일정 필터링
+    const coachEvents = events.filter(e => e.extendedProps.calendarId === cal.id);
+    
+    // 1. 오늘의 수업 건수 계산
+    const todayEvents = coachEvents.filter(e => {
+      const eventDate = new Date(e.start);
+      return eventDate.getFullYear() === today.getFullYear() &&
+             eventDate.getMonth() === today.getMonth() &&
+             eventDate.getDate() === today.getDate();
+    });
+    
+    // 2. 이번주 수업 건수 계산
+    const weeklyEvents = coachEvents.filter(e => {
+      const eventDate = new Date(e.start);
+      return eventDate >= startOfWeek && eventDate <= endOfWeek;
+    });
+    
+    // 오늘 일정을 시간순으로 정렬
+    todayEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    
+    // 오늘 일정 목록 HTML 생성
+    let eventsListHtml = '';
+    if (todayEvents.length > 0) {
+      todayEvents.forEach(e => {
+        const startDate = new Date(e.start);
+        const pad = (num) => String(num).padStart(2, '0');
+        const timeStr = `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+        
+        eventsListHtml += `
+          <div class="coach-status-event-item" style="border-left-color: ${calColor}; cursor: pointer;" data-event-id="${e.id}">
+            <span class="coach-status-event-time" style="color: ${calColor};">${timeStr}</span>
+            <span class="coach-status-event-title" title="${e.title}">${e.title}</span>
+          </div>
+        `;
+      });
+    } else {
+      eventsListHtml = `<div class="coach-status-no-events">오늘 예정된 강습이 없습니다.</div>`;
+    }
+    
+    // 카드 카드 노드 생성
+    const card = document.createElement('div');
+    card.className = 'coach-status-card';
+    card.innerHTML = `
+      <div class="coach-status-header">
+        <span class="coach-status-color" style="background-color: ${calColor};"></span>
+        <h4 class="coach-status-name">${coachName}</h4>
+      </div>
+      <div class="coach-status-stats">
+        <div class="coach-status-pill">오늘 <span>${todayEvents.length}건</span></div>
+        <div class="coach-status-pill">이번주 <span>${weeklyEvents.length}건</span></div>
+      </div>
+      <div class="coach-status-events">
+        ${eventsListHtml}
+      </div>
+    `;
+    
+    coachesGrid.appendChild(card);
+  });
+  
+  // 강사별 오늘 일정 클릭 시 수정 팝업 노출 연동
+  coachesGrid.querySelectorAll('.coach-status-event-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const eventId = item.getAttribute('data-event-id');
+      if (eventId) {
+        const originalEvent = events.find(e => e.id === eventId);
+        if (originalEvent) {
+          showEventEditModal(originalEvent);
+        }
+      }
+    });
+  });
+}
+
+// 8. 일정 상세/수정 클릭 dispatcher
+function handleEventClick(info) {
+  const event = info.event;
+  if (event.extendedProps.isMerged) {
+    const itemEl = info.jsEvent.target.closest('.merged-event-item');
+    const idx = itemEl ? parseInt(itemEl.getAttribute('data-idx'), 10) : 0;
+    const subEvent = event.extendedProps.subEvents[idx];
+    showEventEditModal(subEvent);
+  } else {
+    showEventEditModal({
+      id: event.id,
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      extendedProps: event.extendedProps
+    });
+  }
+}
+
+// 8-1. 실제 일정 수정 모달 활성화 및 바인딩
+function showEventEditModal(eventData) {
+  const calId = eventData.extendedProps.calendarId;
+  
+  eventModalTitle.textContent = '수업 일정 수정';
+  inpEventId.value = eventData.id;
+  // 원래 캘린더 ID 저장
+  eventBackdrop.dataset.originalCalendarId = calId;
+  inpEventTitle.value = eventData.title;
+  inpEventMemberName.value = eventData.extendedProps.memberName || '';
+  
+  // 드롭다운에 해당 캘린더 ID가 있는지 확인
+  let optionExists = false;
+  for (let i = 0; i < inpEventCalendarId.options.length; i++) {
+    if (inpEventCalendarId.options[i].value === calId) {
+      optionExists = true;
+      break;
+    }
+  }
+  
+  // 없다면 임시로 옵션을 추가하여 표시
+  if (!optionExists) {
+    const calMeta = allCalendars.find(c => c.id === calId);
+    let calName = calMeta ? calMeta.summary : '알 수 없는 캘린더';
+    if (calName.startsWith('**헤엄하다_')) {
+      calName = calName.replace('**헤엄하다_', '');
+    }
+    const tempOption = document.createElement('option');
+    tempOption.value = calId;
+    
+    const isWriteAccess = calMeta && (calMeta.accessRole === 'owner' || calMeta.accessRole === 'writer');
+    if (!isWriteAccess) {
+      tempOption.textContent = `[읽기 전용] ${calName}`;
+    } else {
+      tempOption.textContent = `${calName} (강사 외)`;
+    }
+    tempOption.disabled = true;
+    tempOption.id = 'temp-read-only-option'; // 나중에 제거하기 위한 ID
+    inpEventCalendarId.appendChild(tempOption);
+  }
+  
+  inpEventCalendarId.value = calId;
+  
+  // 시간 로드 및 포맷팅 (YYYY-MM-DD, HH:MM)
+  const pad = (num) => String(num).padStart(2, '0');
+  const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const formatTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  
+  const startDate = new Date(eventData.start);
+  inpEventStartDate.value = formatDate(startDate);
+  inpEventStartTime.value = formatTime(startDate);
+  
+  if (eventData.end) {
+    const endDate = new Date(eventData.end);
+    inpEventEndDate.value = formatDate(endDate);
+    inpEventEndTime.value = formatTime(endDate);
+  } else {
+    const defaultEnd = new Date(startDate.getTime() + 60*60*1000);
+    inpEventEndDate.value = formatDate(defaultEnd);
+    inpEventEndTime.value = formatTime(defaultEnd);
+  }
+  
+  inpEventColor.value = eventData.extendedProps.colorVal || '#3b82f6';
+  
+  // 쓰기 권한 검사하여 버튼 및 캘린더 드롭다운 제어
+  const calMeta = allCalendars.find(c => c.id === calId);
+  const canWrite = calMeta && (calMeta.accessRole === 'owner' || calMeta.accessRole === 'writer');
+  const btnSaveEvent = document.getElementById('btn-save-event');
+  
+  if (!canWrite) {
+    btnSaveEvent.disabled = true;
+    btnSaveEvent.textContent = '수정 불가 (읽기 전용)';
+    btnDeleteEvent.style.display = 'none';
+    inpEventCalendarId.disabled = true;
+  } else {
+    btnSaveEvent.disabled = false;
+    btnSaveEvent.textContent = '저장';
+    btnDeleteEvent.style.display = 'inline-flex';
+    inpEventCalendarId.disabled = false; // 수정 가능하면 강사 선택 열어두기
+  }
+  openModal(eventBackdrop);
+}
+
+// 8-2. FullCalendar 커스텀 일정 렌더링 함수
+function renderEventContent(arg) {
+  const event = arg.event;
+  const isTimeGrid = arg.view.type.startsWith('timeGrid');
+  
+  if (!isTimeGrid) {
+    // 월별 뷰(dayGridMonth) 등에서는 콤팩트하고 이쁜 카드 형태로 렌더링
+    const color = event.extendedProps.colorVal || '#6366f1';
+    return {
+      html: `
+        <div class="month-event-item" style="border-left: 2px solid ${color};">
+          ${arg.timeText ? `<span class="month-event-time">${arg.timeText}</span>` : ''}
+          <span class="month-event-title" title="${event.title}">${event.title}</span>
+        </div>
+      `
+    };
+  }
+  
+  if (event.extendedProps.isMerged) {
+    let html = `
+      <div class="merged-events-container">
+        <div class="merged-events-list">
+    `;
+    event.extendedProps.subEvents.forEach((sub, idx) => {
+      const color = sub.extendedProps.colorVal || '#6366f1';
+      html += `
+        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color};">
+          <span class="merged-event-title">${sub.title}</span>
+        </div>
+      `;
+    });
+    html += `
+        </div>
+      </div>
+    `;
+    return { html: html };
+  }
+  
+  const color = event.extendedProps.colorVal || '#6366f1';
+  return {
+    html: `
+      <div class="single-event-container" style="border-left: 3px solid ${color};">
+        <span class="single-event-title">${event.title}</span>
+      </div>
+    `
+  };
+}
+
+// 읽기 전용 임시 옵션 삭제 헬퍼 함수
+function clearTempOptions() {
+  const tempOpt = document.getElementById('temp-read-only-option');
+  if (tempOpt) {
+    tempOpt.remove();
+  }
+}
+
+// 9. 날짜 드래그 선택 시 자동 생성 다이얼로그
+function handleDateSelect(info) {
+  eventModalTitle.textContent = '새 수업 일정 등록';
+  eventForm.reset();
+  
+  inpEventId.value = '';
+  
+  // 신규 등록이므로 캘린더 선택 열어주기
+  inpEventCalendarId.disabled = false;
+  
+  const pad = (num) => String(num).padStart(2, '0');
+  const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const formatTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  
+  inpEventStartDate.value = formatDate(info.start);
+  inpEventStartTime.value = formatTime(info.start);
+  
+  const end = info.end ? new Date(info.end) : new Date(info.start.getTime() + 60*60*1000);
+  if (info.allDay) {
+    end.setHours(info.start.getHours() + 1);
+  }
+  
+  inpEventEndDate.value = formatDate(end);
+  inpEventEndTime.value = formatTime(end);
+  
+  btnDeleteEvent.style.display = 'none';
+  openModal(eventBackdrop);
+}
+
+// 10. 드래그앤드롭 및 리사이징 시 구글 연동
+async function handleEventDropOrResize(info) {
+  const event = info.event;
+  const calendarId = event.extendedProps.calendarId; // 각 일정에 매핑된 정확한 캘린더 ID 획득
+  
+  try {
+    const gEvent = await gapi.client.calendar.events.get({
+      calendarId: calendarId,
+      eventId: event.id
+    });
+    
+    gEvent.result.start = { dateTime: event.start.toISOString() };
+    gEvent.result.end = { dateTime: event.end ? event.end.toISOString() : new Date(event.start.getTime() + 60*60*1000).toISOString() };
+    
+    await gapi.client.calendar.events.update({
+      calendarId: calendarId,
+      eventId: event.id,
+      resource: gEvent.result
+    });
+    
+    console.log('Event schedule updated in Google Calendar');
+    googleEventsCache.clear(); // 드래그/리사이즈로 수정 시 캐시 비우기
+  } catch (err) {
+    console.error('Error updating event drag/resize:', err);
+    info.revert();
+  }
+}
+
+// 11. 일정 폼 제출 (저장/생성)
+eventForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const id = inpEventId.value;
+  const calendarId = inpEventCalendarId.value; // 선택 혹은 고정된 타겟 캘린더 ID
+  const title = inpEventTitle.value;
+  const memberName = inpEventMemberName.value;
+  
+  // 선택된 강사 이름 가져오기
+  const selectedOption = inpEventCalendarId.options[inpEventCalendarId.selectedIndex];
+  let coachName = '';
+  if (selectedOption) {
+    coachName = selectedOption.textContent.replace('[읽기 전용] ', '').replace(' (강사 외)', '').trim();
+  }
+  
+  const startStr = `${inpEventStartDate.value}T${inpEventStartTime.value}:00`;
+  const endStr = `${inpEventEndDate.value}T${inpEventEndTime.value}:00`;
+  const color = inpEventColor.value;
+  
+  let googleColorId = '1';
+  if (color === '#06b6d4') googleColorId = '7';
+  if (color === '#8b5cf6') googleColorId = '4';
+  if (color === '#ec4899') googleColorId = '11';
+  if (color === '#f59e0b') googleColorId = '5';
+  
+  const eventResource = {
+    summary: title,
+    description: `회원: ${memberName}\n강사: ${coachName}`,
+    start: {
+      dateTime: new Date(startStr).toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    end: {
+      dateTime: new Date(endStr).toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    colorId: googleColorId
+  };
+  
+  try {
+    if (id) {
+      // 수정 (Update)
+      const originalCalendarId = eventBackdrop.dataset.originalCalendarId;
+      if (originalCalendarId && originalCalendarId !== calendarId) {
+        // 강사(캘린더)가 변경되었을 경우 이벤트 이동(move) 수행
+        await gapi.client.calendar.events.move({
+          calendarId: originalCalendarId,
+          eventId: id,
+          destination: calendarId
+        });
+      }
+      
+      await gapi.client.calendar.events.patch({
+        calendarId: calendarId,
+        eventId: id,
+        resource: eventResource
+      });
+      console.log('Event updated');
+    } else {
+      // 신규 생성 (Insert)
+      await gapi.client.calendar.events.insert({
+        calendarId: calendarId,
+        resource: eventResource
+      });
+      console.log('Event created');
+    }
+    
+    closeModal(eventBackdrop);
+    refetchCalendarEvents(true);
+  } catch (err) {
+    console.error('Error saving event:', err);
+    alert('구글 캘린더에 일정을 저장하는 데 실패했습니다.');
+  }
+});
+
+// 12. 일정 삭제
+btnDeleteEvent.addEventListener('click', async () => {
+  const id = inpEventId.value;
+  const calendarId = inpEventCalendarId.value; // 고정된 타겟 캘린더 ID
+  if (!id || !calendarId) return;
+  
+  if (confirm('이 일정(수업)을 삭제하시겠습니까?')) {
+    try {
+      await gapi.client.calendar.events.delete({
+        calendarId: calendarId,
+        eventId: id
+      });
+      console.log('Event deleted');
+      closeModal(eventBackdrop);
+      refetchCalendarEvents(true);
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      alert('일정을 삭제하는 데 실패했습니다.');
+    }
+  }
+});
+
+// 13. 설정 로드 및 저장 관리
+function loadSavedSettingsToForm() {
+  setClientId.value = CONFIG.getClientId();
+  setApiKey.value = CONFIG.getApiKey();
+  setCalendarId.value = CONFIG.getCalendarId();
+  setWhitelist.value = CONFIG.getWhitelist().join(', ');
+}
+
+settingsForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  
+  saveConfig({
+    clientId: setClientId.value,
+    apiKey: setApiKey.value,
+    calendarId: setCalendarId.value,
+    whitelistEmails: setWhitelist.value
+  });
+  
+  closeModal(settingsBackdrop);
+  checkApiSetup();
+  
+  const clientId = CONFIG.getClientId();
+  const apiKey = CONFIG.getApiKey();
+  
+  if (clientId && apiKey) {
+    initializeGapiClient();
+    initializeGisClient();
+    alert('설정이 저장되었습니다. 페이지를 새로고침하여 적용해 주세요!');
+    window.location.reload();
+  }
+});
+
+// 공통 모달 열기/닫기
+function openModal(modalBackdrop) {
+  modalBackdrop.classList.add('active');
+}
+
+function closeModal(modalBackdrop) {
+  modalBackdrop.classList.remove('active');
+  if (modalBackdrop === eventBackdrop) {
+    clearTempOptions();
+  }
+}
+
+// 이벤트 리스너 설정
+function setupEventListeners() {
+  googleLoginBtn.addEventListener('click', () => {
+    if (tokenClient) {
+      tokenClient.callback = handleAuthCallback;
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+      alert('구글 API 설정이 부족합니다. 설정을 완료해 주세요.');
+    }
+  });
+  
+  tempSetupBtn.addEventListener('click', () => openModal(settingsBackdrop));
+  btnOpenSettings.addEventListener('click', () => openModal(settingsBackdrop));
+  btnSetupNow.addEventListener('click', () => openModal(settingsBackdrop));
+  
+  closeSettingsBtn.addEventListener('click', () => closeModal(settingsBackdrop));
+  btnCancelSettings.addEventListener('click', () => closeModal(settingsBackdrop));
+  
+  btnAddEvent.addEventListener('click', () => {
+    eventModalTitle.textContent = '새 수업 일정 등록';
+    eventForm.reset();
+    inpEventId.value = '';
+    inpEventCalendarId.disabled = false; // 신규는 언제나 캘린더 지정 가능
+    
+    const now = new Date();
+    const pad = (num) => String(num).padStart(2, '0');
+    inpEventStartDate.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    inpEventStartTime.value = `${pad(now.getHours())}:00`;
+    
+    const oneHourLater = new Date(now.getTime() + 60*60*1000);
+    inpEventEndDate.value = `${oneHourLater.getFullYear()}-${pad(oneHourLater.getMonth()+1)}-${pad(oneHourLater.getDate())}`;
+    inpEventEndTime.value = `${pad(oneHourLater.getHours())}:00`;
+    
+    btnDeleteEvent.style.display = 'none';
+    openModal(eventBackdrop);
+  });
+  
+  closeEventBtn.addEventListener('click', () => closeModal(eventBackdrop));
+  btnCancelEvent.addEventListener('click', () => closeModal(eventBackdrop));
+  
+  btnLogout.addEventListener('click', () => {
+    if (confirm('로그아웃 하시겠습니까?')) {
+      if (accessToken) {
+        google.accounts.oauth2.revokeToken(accessToken, () => {});
+      }
+      clearSession();
+      showLoginScreen();
+    }
+  });
+
+  // 캘린더 전체 선택 및 해제 이벤트 리스너 추가
+  document.getElementById('btn-cal-select-all').addEventListener('click', () => {
+    const isLessonsOnly = document.body.classList.contains('lessons-calendar-mode');
+    const checkboxes = calendarListContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if (isLessonsOnly) {
+        const item = cb.closest('.calendar-checkbox-item');
+        if (item && item.classList.contains('is-instructor')) {
+          cb.checked = true;
+          selectedCalendarIds.add(cb.getAttribute('data-id'));
+        }
+      } else {
+        const isMyCal = cb.getAttribute('data-is-my-cal') === 'true';
+        if (isMyCal) {
+          cb.checked = true;
+          selectedCalendarIds.add(cb.getAttribute('data-id'));
+        }
+      }
+    });
+    refetchCalendarEvents(false);
+  });
+
+  document.getElementById('btn-cal-deselect-all').addEventListener('click', () => {
+    const isLessonsOnly = document.body.classList.contains('lessons-calendar-mode');
+    const checkboxes = calendarListContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if (isLessonsOnly) {
+        const item = cb.closest('.calendar-checkbox-item');
+        if (item && item.classList.contains('is-instructor')) {
+          cb.checked = false;
+          selectedCalendarIds.delete(cb.getAttribute('data-id'));
+        }
+      } else {
+        cb.checked = false;
+        selectedCalendarIds.delete(cb.getAttribute('data-id'));
+      }
+    });
+    refetchCalendarEvents(false);
+  });
+
+  // 상단 탭 메뉴 전환 이벤트 리스너 추가
+  const tabCalendar = document.getElementById('tab-calendar');
+  const tabLessonsCalendar = document.getElementById('tab-lessons-calendar');
+  const tabCoaches = document.getElementById('tab-coaches');
+  const tabRetention = document.getElementById('tab-retention');
+  const calendarViewCard = document.getElementById('calendar-view-card');
+  const coachesViewCard = document.getElementById('coaches-view-card');
+  const retentionViewCard = document.getElementById('retention-view-card');
+  
+  if (tabCalendar && tabLessonsCalendar && tabCoaches && tabRetention && calendarViewCard && coachesViewCard && retentionViewCard) {
+    tabCalendar.addEventListener('click', () => {
+      tabCalendar.classList.add('active');
+      tabLessonsCalendar.classList.remove('active');
+      tabCoaches.classList.remove('active');
+      tabRetention.classList.remove('active');
+      document.body.classList.remove('lessons-calendar-mode');
+      calendarViewCard.style.display = 'block';
+      coachesViewCard.style.display = 'none';
+      retentionViewCard.style.display = 'none';
+      updateSidebarVisibility();
+      refetchCalendarEvents(false);
+    });
+    
+    tabLessonsCalendar.addEventListener('click', () => {
+      tabCalendar.classList.remove('active');
+      tabLessonsCalendar.classList.add('active');
+      tabCoaches.classList.remove('active');
+      tabRetention.classList.remove('active');
+      document.body.classList.add('lessons-calendar-mode');
+      calendarViewCard.style.display = 'block';
+      coachesViewCard.style.display = 'none';
+      retentionViewCard.style.display = 'none';
+      updateSidebarVisibility();
+      refetchCalendarEvents(false);
+    });
+    
+    tabCoaches.addEventListener('click', () => {
+      tabCoaches.classList.add('active');
+      tabCalendar.classList.remove('active');
+      tabLessonsCalendar.classList.remove('active');
+      tabRetention.classList.remove('active');
+      document.body.classList.remove('lessons-calendar-mode');
+      calendarViewCard.style.display = 'none';
+      coachesViewCard.style.display = 'flex';
+      retentionViewCard.style.display = 'none';
+      updateSidebarVisibility();
+    });
+    
+    tabRetention.addEventListener('click', () => {
+      tabRetention.classList.add('active');
+      tabCalendar.classList.remove('active');
+      tabLessonsCalendar.classList.remove('active');
+      tabCoaches.classList.remove('active');
+      document.body.classList.remove('lessons-calendar-mode');
+      calendarViewCard.style.display = 'none';
+      coachesViewCard.style.display = 'none';
+      retentionViewCard.style.display = 'flex';
+      updateSidebarVisibility();
+      loadRetentionData();
+    });
+  }
+}
+
+// 14. 강사별 재등록율 데이터 로드 및 계산
+async function loadRetentionData() {
+  const loadingEl = document.getElementById('retention-loading');
+  const contentEl = document.getElementById('retention-content');
+  const gridEl = document.getElementById('retention-grid');
+  
+  if (!loadingEl || !contentEl || !gridEl) return;
+  
+  loadingEl.style.display = 'block';
+  contentEl.style.display = 'none';
+  gridEl.innerHTML = '';
+  
+  try {
+    // 강사 캘린더 추출 ('**헤엄하다_' 로 시작하는 목록)
+    const coachCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
+    if (coachCalendars.length === 0) {
+      gridEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem; font-weight: 500;">분석할 수 있는 강사 캘린더 목록이 없습니다.</div>';
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      return;
+    }
+    
+    // 분석할 과거 범위 설정 (최근 6개월)
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+    
+    // 각 강사 캘린더로부터 6개월치의 일정을 병렬로 로드
+    const fetchPromises = coachCalendars.map(async (cal) => {
+      try {
+        const response = await gapi.client.calendar.events.list({
+          calendarId: cal.id,
+          timeMin: sixMonthsAgo.toISOString(),
+          timeMax: now.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 2500
+        });
+        
+        return {
+          cal: cal,
+          events: response.result.items || []
+        };
+      } catch (err) {
+        console.warn(`강사 캘린더 ${cal.summary} 일정 로드 실패:`, err);
+        return { cal: cal, events: [] };
+      }
+    });
+    
+    const results = await Promise.all(fetchPromises);
+    
+    // 강사별 재등록율 계산 및 렌더링
+    results.forEach(res => {
+      const coachName = res.cal.summary.replace('**헤엄하다_', '');
+      const calColor = res.cal.backgroundColor || '#3b82f6';
+      const eventsList = res.events;
+      
+      // 회원별 데이터 그룹화
+      const members = {};
+      
+      eventsList.forEach(gEvent => {
+        let memberName = '';
+        if (gEvent.description) {
+          const memberMatch = gEvent.description.match(/회원:\s*(.*)/);
+          if (memberMatch) {
+            memberName = memberMatch[1].trim();
+          } else {
+            const oldMatch = gEvent.description.match(/담당\/회원:\s*(.*)/);
+            if (oldMatch) {
+              const oldVal = oldMatch[1];
+              memberName = oldVal.includes('/') ? oldVal.split('/')[0].trim() : oldVal.trim();
+            }
+          }
+        }
+        
+        // 타이틀에서도 시도
+        if (!memberName && gEvent.summary) {
+          const titleMatch = gEvent.summary.match(/\]\s*([^\(]+)/);
+          if (titleMatch) {
+            memberName = titleMatch[1].trim();
+          }
+        }
+        
+        if (!memberName) return; // 회원명이 없으면 제외
+        
+        let current = null;
+        let total = null;
+        if (gEvent.summary) {
+          const sessionMatch = gEvent.summary.match(/(\d+)\/(\d+)\s*회차/);
+          if (sessionMatch) {
+            current = parseInt(sessionMatch[1], 10);
+            total = parseInt(sessionMatch[2], 10);
+          }
+        }
+        
+        const date = new Date(gEvent.start.dateTime || gEvent.start.date);
+        
+        if (!members[memberName]) {
+          members[memberName] = [];
+        }
+        members[memberName].push({
+          date: date,
+          current: current,
+          total: total,
+          summary: gEvent.summary
+        });
+      });
+      
+      // 각 회원의 등록 회차 수 계산
+      const memberRetentionStats = [];
+      let totalMembers = 0;
+      let reRegisteredCount = 0;
+      
+      Object.keys(members).forEach(mName => {
+        const lessons = members[mName];
+        lessons.sort((a, b) => a.date - b.date); // 시간 순 정렬
+        
+        let packageCount = 0;
+        let lastCurrent = -1;
+        let lastTotal = -1;
+        let maxSessionInfo = '회차 정보 없음';
+        
+        lessons.forEach(l => {
+          if (l.current !== null && l.total !== null) {
+            // 리셋 감지 (이전 회차보다 번호가 내려갔거나, 총 회차가 바뀌었을 때)
+            if (l.current < lastCurrent || l.total !== lastTotal) {
+              packageCount++;
+            } else if (packageCount === 0) {
+              packageCount = 1;
+            }
+            lastCurrent = l.current;
+            lastTotal = l.total;
+          }
+        });
+        
+        if (packageCount === 0) {
+          packageCount = 1;
+        }
+        
+        if (lastCurrent !== -1 && lastTotal !== -1) {
+          maxSessionInfo = `현재: ${lastCurrent}/${lastTotal}회차`;
+        }
+        
+        totalMembers++;
+        if (packageCount >= 2) {
+          reRegisteredCount++;
+        }
+        
+        memberRetentionStats.push({
+          name: mName,
+          packageCount: packageCount,
+          status: maxSessionInfo,
+          totalLessonsCount: lessons.length,
+          isReRegistered: packageCount >= 2
+        });
+      });
+      
+      const rate = totalMembers > 0 ? (reRegisteredCount / totalMembers) * 100 : 0;
+      const singleCount = totalMembers - reRegisteredCount;
+      
+      // 회원 상세 보기 HTML 생성
+      memberRetentionStats.sort((a, b) => b.packageCount - a.packageCount || a.name.localeCompare(b.name));
+      let memberItemsHtml = '';
+      if (memberRetentionStats.length > 0) {
+        memberRetentionStats.forEach(mem => {
+          memberItemsHtml += `
+            <div class="retention-member-item">
+              <span class="retention-member-name">${mem.name}</span>
+              <span class="retention-member-lessons">(총 수업 ${mem.totalLessonsCount}회)</span>
+              <span class="retention-member-status">${mem.status}</span>
+              <span class="retention-member-badge ${mem.isReRegistered ? 're-registered' : 'single'}">
+                ${mem.packageCount}회 등록${mem.isReRegistered ? ' (재등록)' : ''}
+              </span>
+            </div>
+          `;
+        });
+      } else {
+        memberItemsHtml = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1rem;">진행된 수업 기록이 없습니다.</div>';
+      }
+      
+      // 카드 생성
+      const card = document.createElement('div');
+      card.className = 'retention-card';
+      card.innerHTML = `
+        <div class="retention-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="retention-color" style="background-color: ${calColor};"></span>
+            <h4 class="retention-coach-name">${coachName}</h4>
+          </div>
+          <span class="retention-percentage" style="color: ${calColor}; background-color: ${calColor}10;">${rate.toFixed(1)}%</span>
+        </div>
+        
+        <div class="retention-progress-bg">
+          <div class="retention-progress-bar" style="width: ${rate}%; background-color: ${calColor};"></div>
+        </div>
+        
+        <div class="retention-stats">
+          <div class="retention-stat-item">전체 회원<span>${totalMembers}명</span></div>
+          <div class="retention-stat-item">재등록 회원<span>${reRegisteredCount}명</span></div>
+          <div class="retention-stat-item">신규/단건<span>${singleCount}명</span></div>
+        </div>
+        
+        <div class="retention-members-toggle" data-cal-id="${res.cal.id}" style="color: ${calColor};">
+          회원 상세 보기 <i class="fa-solid fa-chevron-down" style="margin-left: 4px;"></i>
+        </div>
+        
+        <div id="retention-members-${res.cal.id}" class="retention-members-list" style="display: none;">
+          ${memberItemsHtml}
+        </div>
+      `;
+      
+      gridEl.appendChild(card);
+    });
+    
+    // 상세 토글 리스너 바인딩
+    gridEl.querySelectorAll('.retention-members-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const calId = btn.getAttribute('data-cal-id');
+        const listEl = document.getElementById(`retention-members-${calId}`);
+        const iconEl = btn.querySelector('i');
+        
+        if (listEl && listEl.style.display === 'none') {
+          listEl.style.display = 'flex';
+          iconEl.className = 'fa-solid fa-chevron-up';
+        } else if (listEl) {
+          listEl.style.display = 'none';
+          iconEl.className = 'fa-solid fa-chevron-down';
+        }
+      });
+    });
+    
+    loadingEl.style.display = 'none';
+    contentEl.style.display = 'block';
+  } catch (err) {
+    console.error('재등록율 분석 실패:', err);
+    gridEl.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 3rem; font-weight: 500;">재등록율 데이터를 불러오는 중 오류가 발생했습니다.<br>${err.message || err}</div>`;
+    loadingEl.style.display = 'none';
+    contentEl.style.display = 'block';
+  }
+}
