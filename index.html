@@ -86,6 +86,9 @@
           <button id="btn-open-settings" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; gap: 10px;">
             <i class="fa-solid fa-gears"></i> API 및 연동 설정
           </button>
+          <button id="btn-open-notifier" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; gap: 10px; margin-top: 8px;">
+            <i class="fa-solid fa-comment-sms"></i> 알림 메시지 생성기
+          </button>
         </nav>
       </div>
       
@@ -485,6 +488,70 @@
           <button type="submit" id="btn-save-member" class="btn btn-primary">저장</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 6. 알림 메시지 생성기 모달 (Notifier Modal) -->
+  <div id="notifier-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 750px; width: 90%;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-comment-sms"></i> 알림 메시지 생성기</h3>
+        <button id="close-notifier-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top: 0.5rem;">
+        
+        <!-- 날짜 및 템플릿 제어부 -->
+        <div class="form-row" style="margin-bottom: 1.2rem;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="notifier-target-date">대상 수업 일자</label>
+            <input type="date" id="notifier-target-date" class="form-control">
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label" for="notifier-template-select">알림 템플릿 선택</label>
+            <select id="notifier-template-select" class="form-control">
+              <option value="template-a">템플릿 A (기본 안내)</option>
+              <option value="template-b">템플릿 B (준비물 안내)</option>
+              <option value="template-c">템플릿 C (심플 강습)</option>
+              <option value="custom">직접 편집 (커스텀)</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- 템플릿 문구 편집기 -->
+        <div class="form-group" style="margin-bottom: 1.2rem;">
+          <label class="form-label" for="notifier-template-text">템플릿 본문 편집 (치환자: {이름}, {날짜}, {시간}, {강사})</label>
+          <textarea id="notifier-template-text" class="form-control" rows="3" placeholder="메시지 템플릿 내용을 적어주세요."></textarea>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin: 0;"><i class="fa-solid fa-list-check"></i> 생성된 메시지 목록 (<span id="notifier-list-count">0</span>건)</h4>
+          <button type="button" id="btn-notifier-refresh" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; gap: 4px;">
+            <i class="fa-solid fa-arrows-rotate"></i> 불러오기
+          </button>
+        </div>
+        
+        <!-- 로딩 표시 및 생성 결과 스크롤 영역 -->
+        <div id="notifier-loading" style="display: none; text-align: center; padding: 2rem;">
+          <div class="spinner-container" style="margin: 0 auto 0.5rem;">
+            <div class="double-bounce1"></div>
+            <div class="double-bounce2"></div>
+          </div>
+          <span style="font-size: 0.8rem; font-weight: 600; color: var(--color-primary);">일정을 분석하여 알림 메시지를 생성 중입니다...</span>
+        </div>
+        
+        <div id="notifier-empty-msg" style="text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.85rem;">
+          <i class="fa-solid fa-calendar-xmark" style="font-size: 1.5rem; margin-bottom: 8px; display: block; color: var(--border-color);"></i>
+          해당 날짜에 예정된 수업 일정이 없습니다.
+        </div>
+        
+        <div id="notifier-results-container" style="display: none; max-height: 250px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 10px;">
+          <!-- 동적으로 생성된 회원 알림 카드들이 추가됨 -->
+        </div>
+        
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+        <button type="button" id="btn-close-notifier" class="btn btn-secondary">닫기</button>
+      </div>
     </div>
   </div>
 

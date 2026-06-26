@@ -82,6 +82,20 @@ const membersListContainer = document.getElementById('members-list-container');
 const membersCountSummary = document.getElementById('members-count-summary');
 const membersTbody = document.getElementById('members-tbody');
 
+// 알림 메시지 생성기 DOM 관련
+const btnOpenNotifier = document.getElementById('btn-open-notifier');
+const notifierBackdrop = document.getElementById('notifier-backdrop');
+const closeNotifierBtn = document.getElementById('close-notifier-btn');
+const btnCloseNotifier = document.getElementById('btn-close-notifier');
+const notifierTargetDate = document.getElementById('notifier-target-date');
+const notifierTemplateSelect = document.getElementById('notifier-template-select');
+const notifierTemplateText = document.getElementById('notifier-template-text');
+const btnNotifierRefresh = document.getElementById('btn-notifier-refresh');
+const notifierLoading = document.getElementById('notifier-loading');
+const notifierEmptyMsg = document.getElementById('notifier-empty-msg');
+const notifierResultsContainer = document.getElementById('notifier-results-container');
+const notifierListCount = document.getElementById('notifier-list-count');
+
 
 // 일정 모달 관련
 const eventBackdrop = document.getElementById('event-backdrop');
@@ -1392,6 +1406,28 @@ function setupEventListeners() {
   btnOpenSettings.addEventListener('click', () => openModal(settingsBackdrop));
   btnSetupNow.addEventListener('click', () => openModal(settingsBackdrop));
   
+  if (btnOpenNotifier) {
+    btnOpenNotifier.addEventListener('click', openNotifierModal);
+  }
+  if (closeNotifierBtn) {
+    closeNotifierBtn.addEventListener('click', () => closeModal(notifierBackdrop));
+  }
+  if (btnCloseNotifier) {
+    btnCloseNotifier.addEventListener('click', () => closeModal(notifierBackdrop));
+  }
+  if (notifierTargetDate) {
+    notifierTargetDate.addEventListener('change', () => generateNotifications());
+  }
+  if (notifierTemplateSelect) {
+    notifierTemplateSelect.addEventListener('change', handleTemplateSelectChange);
+  }
+  if (notifierTemplateText) {
+    notifierTemplateText.addEventListener('input', () => renderNotifierMessages());
+  }
+  if (btnNotifierRefresh) {
+    btnNotifierRefresh.addEventListener('click', () => generateNotifications());
+  }
+  
   closeSettingsBtn.addEventListener('click', () => closeModal(settingsBackdrop));
   btnCancelSettings.addEventListener('click', () => closeModal(settingsBackdrop));
   
@@ -1622,6 +1658,10 @@ function setupEventListeners() {
       }
       if (memberBackdrop && memberBackdrop.classList.contains('active')) {
         closeModal(memberBackdrop);
+        isModalClosed = true;
+      }
+      if (notifierBackdrop && notifierBackdrop.classList.contains('active')) {
+        closeModal(notifierBackdrop);
         isModalClosed = true;
       }
       
@@ -2537,4 +2577,287 @@ if (memberFilterInput) {
 if (btnMemberRefresh) {
   btnMemberRefresh.addEventListener('click', loadMemberList);
 }
+
+// =========================================================================
+// 카카오톡 알림 메시지 생성기 로직
+// =========================================================================
+
+const DEFAULT_TEMPLATES = {
+  'template-a': "[헤엄하다] 안녕하세요, {이름}님!\n내일({날짜}) {시간}에 {강사} 강사님과의 수영 수업이 예정되어 있습니다. 🏊‍♂️\n\n지각하지 않으시도록 시간 맞춰 참석 부탁드립니다. 감사합니다!",
+  'template-b': "[헤엄하다] 수영 강습 안내\n{이름}님, 내일 {시간} 수영 수업 안내입니다. 🏊\n\n준비물: 수영복, 수모, 수경, 샤워도구\n내일 뵙겠습니다. 즐거운 수업 준비해 보세요!",
+  'template-c': "[헤엄하다] 강습 알림\n내일 수업 안내: {이름}님 ({시간} 수업)\n\n내일 뵙겠습니다! 😊"
+};
+
+let notifierEvents = []; // 알림 생성 대상이 되는 내일의 일정 정보 목록
+
+// 1. 알림 모달 열기 및 초기 설정
+function openNotifierModal() {
+  if (!notifierBackdrop || !notifierTargetDate || !notifierTemplateSelect || !notifierTemplateText) return;
+  
+  // 대상 수업 일자를 '내일' 날짜로 세팅
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  notifierTargetDate.value = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+  
+  // 기본 템플릿(템플릿 A) 선택 및 문구 자동 로딩
+  notifierTemplateSelect.value = 'template-a';
+  notifierTemplateText.value = DEFAULT_TEMPLATES['template-a'];
+  notifierTemplateText.disabled = false;
+  
+  openModal(notifierBackdrop);
+  
+  // 내일 일정 조회 및 메시지 빌드
+  generateNotifications();
+}
+
+// 2. 템플릿 선택 변경 시 본문 반영
+function handleTemplateSelectChange() {
+  const selectedType = notifierTemplateSelect.value;
+  if (selectedType === 'custom') {
+    notifierTemplateText.disabled = false;
+    notifierTemplateText.placeholder = "직접 알림 메시지 템플릿을 입력하세요. 치환자: {이름}, {날짜}, {시간}, {강사}";
+  } else {
+    notifierTemplateText.value = DEFAULT_TEMPLATES[selectedType] || '';
+    notifierTemplateText.disabled = false;
+  }
+  renderNotifierMessages();
+}
+
+// 3. 구글 캘린더에서 대상 일자 수업 데이터 로딩
+async function generateNotifications() {
+  if (!notifierTargetDate || !notifierLoading || !notifierEmptyMsg || !notifierResultsContainer || !notifierListCount) return;
+  
+  const targetDateStr = notifierTargetDate.value;
+  if (!targetDateStr) {
+    alert('대상 수업 일자를 선택해 주세요.');
+    return;
+  }
+  
+  notifierLoading.style.display = 'block';
+  notifierEmptyMsg.style.display = 'none';
+  notifierResultsContainer.style.display = 'none';
+  notifierListCount.textContent = '0';
+  
+  try {
+    // 대상 날짜의 시작(00:00)과 끝(23:59:59) 타임스탬프 구하기
+    const targetDate = new Date(targetDateStr);
+    const start = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+    const end = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+    
+    // 활성 캘린더 ID 취득
+    const targetCalendarIds = Array.from(selectedCalendarIds);
+    if (targetCalendarIds.length === 0) {
+      notifierLoading.style.display = 'none';
+      notifierEmptyMsg.style.display = 'block';
+      notifierEmptyMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size: 1.5rem; margin-bottom: 8px; display: block; color: var(--color-primary);"></i>캘린더 목록에서 최소 하나의 강사를 체크해 주세요.';
+      return;
+    }
+    
+    // 스프레드시트 회원 DB가 로드되지 않았다면 로드
+    if (cachedMembers.length === 0) {
+      try {
+        const spreadsheetId = CONFIG.getSpreadsheetId();
+        if (spreadsheetId) {
+          const sheetResp = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId: spreadsheetId,
+            range: '회원목록!A2:I1000'
+          });
+          const rows = sheetResp.result.values || [];
+          cachedMembers = rows.map((row, index) => {
+            return {
+              rowIndex: index + 2,
+              id: row[0] || '',
+              name: row[1] || '',
+              gender: row[2] || '',
+              age: row[3] || '',
+              isAdult: row[4] || '',
+              phone: row[5] || '',
+              joinedDate: row[6] || '',
+              memo: row[7] || '',
+              status: row[8] || ''
+            };
+          }).filter(m => m.id !== '');
+        }
+      } catch (sheetErr) {
+        console.warn('알림 생성용 회원 목록 로드 중 에러 무시:', sheetErr);
+      }
+    }
+    
+    // 각 활성 캘린더별 일정을 병렬로 가져옵니다.
+    const promises = targetCalendarIds.map(async (calendarId) => {
+      const calMeta = allCalendars.find(c => c.id === calendarId);
+      const coachName = calMeta ? calMeta.summary || '' : '';
+      
+      const response = await gapi.client.calendar.events.list({
+        calendarId: calendarId,
+        timeMin: start.toISOString(),
+        timeMax: end.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+      
+      const items = response.result.items || [];
+      return items.map(evt => {
+        return {
+          event: evt,
+          coachName: coachName
+        };
+      });
+    });
+    
+    const results = await Promise.all(promises);
+    const flatEvents = results.flat();
+    
+    notifierEvents = [];
+    
+    flatEvents.forEach(item => {
+      const evt = item.event;
+      // 강사별 일정 필터
+      let memberName = '';
+      const summary = evt.summary || '';
+      
+      // 대괄호로 둘러싸인 구분 기호 파싱 (예: [초급] 홍길동 => 홍길동)
+      const bracketMatch = summary.match(/\[.*?\]\s*(.*)/);
+      if (bracketMatch) {
+        memberName = bracketMatch[1].trim();
+      } else {
+        memberName = summary.trim();
+      }
+      
+      // 시작 시간 구하기
+      const startDateTime = evt.start.dateTime || evt.start.date;
+      const startTimeObj = new Date(startDateTime);
+      const pad = (n) => String(n).padStart(2, '0');
+      const timeStr = `${pad(startTimeObj.getHours())}:${pad(startTimeObj.getMinutes())}`;
+      
+      // 회원 연락처 매핑
+      const matchedMember = cachedMembers.find(m => m.name === memberName);
+      const phoneNum = matchedMember ? matchedMember.phone : '연락처 미등록';
+      
+      notifierEvents.push({
+        id: evt.id,
+        name: memberName,
+        phone: phoneNum,
+        time: timeStr,
+        date: targetDateStr,
+        coach: item.coachName
+      });
+    });
+    
+    // 시간 순 정렬
+    notifierEvents.sort((a, b) => a.time.localeCompare(b.time));
+    
+    renderNotifierMessages();
+  } catch (err) {
+    console.error('Error generating notification list:', err);
+    alert('알림 대상 일정을 가져오는 중 오류가 발생했습니다.');
+    notifierLoading.style.display = 'none';
+  }
+}
+
+// 4. 생성된 데이터를 화면에 카드 목록으로 바인딩
+function renderNotifierMessages() {
+  if (!notifierLoading || !notifierEmptyMsg || !notifierResultsContainer || !notifierListCount || !notifierTemplateText) return;
+  
+  notifierResultsContainer.innerHTML = '';
+  
+  if (notifierEvents.length === 0) {
+    notifierLoading.style.display = 'none';
+    notifierEmptyMsg.style.display = 'block';
+    return;
+  }
+  
+  notifierListCount.textContent = notifierEvents.length;
+  const templateRaw = notifierTemplateText.value;
+  
+  // 날짜 한글 요일 포맷팅 (예: 2026-06-27 -> 6월 27일 토요일)
+  const targetDateStr = notifierTargetDate.value;
+  let formattedDate = targetDateStr;
+  if (targetDateStr) {
+    const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    const d = new Date(targetDateStr);
+    formattedDate = `${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}`;
+  }
+  
+  notifierEvents.forEach(item => {
+    // 템플릿 치환
+    let messageText = templateRaw
+      .replace(/{이름}/g, item.name)
+      .replace(/{날짜}/g, formattedDate)
+      .replace(/{시간}/g, item.time)
+      .replace(/{강사}/g, item.coach);
+      
+    const card = document.createElement('div');
+    card.className = 'notifier-card';
+    
+    card.innerHTML = `
+      <div class="notifier-card-header">
+        <span class="notifier-card-title">
+          <i class="fa-solid fa-user" style="color: var(--color-primary);"></i> ${escapeHtml(item.name)} 
+          <span style="font-size:0.75rem; font-weight:normal; color:var(--text-muted);">(${escapeHtml(item.time)})</span>
+        </span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="notifier-card-phone"><i class="fa-solid fa-phone"></i> ${escapeHtml(item.phone)}</span>
+          <button class="notifier-copy-btn" title="클립보드 복사">
+            <i class="fa-solid fa-copy"></i> 복사하기
+          </button>
+        </div>
+      </div>
+      <div class="notifier-card-body">${escapeHtml(messageText)}</div>
+    `;
+    
+    // 개별 복사 버튼 리스너 바인딩
+    const copyBtn = card.querySelector('.notifier-copy-btn');
+    copyBtn.addEventListener('click', () => {
+      copyNotifierToClipboard(messageText, copyBtn);
+    });
+    
+    notifierResultsContainer.appendChild(card);
+  });
+  
+  notifierLoading.style.display = 'none';
+  notifierResultsContainer.style.display = 'flex';
+}
+
+// 5. 클립보드 복사 및 토스트 배너 피드백
+function copyNotifierToClipboard(text, btnElement) {
+  navigator.clipboard.writeText(text).then(() => {
+    // 버튼 스타일 임시 피드백
+    const origHtml = btnElement.innerHTML;
+    btnElement.innerHTML = '<i class="fa-solid fa-check"></i> 복사 완료!';
+    btnElement.classList.add('copied');
+    
+    // 토스트 배너 팝업 띄우기
+    showToastNotification('알림 메시지가 클립보드에 복사되었습니다.');
+    
+    setTimeout(() => {
+      btnElement.innerHTML = origHtml;
+      btnElement.classList.remove('copied');
+    }, 2000);
+  }).catch(err => {
+    console.error('클립보드 복사 실패:', err);
+    alert('메시지 복사에 실패했습니다. 수동으로 복사해 주세요.');
+  });
+}
+
+// 토스트 배너 생성 헬퍼
+function showToastNotification(message) {
+  let toast = document.querySelector('.notifier-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'notifier-toast';
+    toast.innerHTML = `<i class="fa-solid fa-check-circle" style="color:var(--color-secondary); font-size:1.1rem;"></i> <span></span>`;
+    document.body.appendChild(toast);
+  }
+  
+  toast.querySelector('span').textContent = message;
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
 
