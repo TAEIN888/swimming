@@ -1,15 +1,17 @@
 // Google Calendar 및 OAuth 설정 관리
-let secrets = { clientId: '', apiKey: '', calendarId: 'heumhadas@gmail.com' };
+export const secrets = { clientId: '', apiKey: '', calendarId: 'heumhadas@gmail.com' };
 
-try {
-  const response = await fetch('./secrets.json');
-  if (response.ok) {
-    const data = await response.json();
-    secrets = { ...secrets, ...data };
-    console.log('로컬 secrets.json 설정을 성공적으로 로드했습니다.');
+export async function loadSecrets() {
+  try {
+    const response = await fetch('./secrets.json');
+    if (response.ok) {
+      const data = await response.json();
+      Object.assign(secrets, data);
+      console.log('로컬 secrets.json 설정을 성공적으로 로드했습니다.');
+    }
+  } catch (err) {
+    console.log('로컬 secrets.json 파일이 없습니다. 수동 설정을 사용합니다.');
   }
-} catch (err) {
-  console.log('로컬 secrets.json 파일이 없습니다. 수동 설정을 사용합니다.');
 }
 
 export const CONFIG = {

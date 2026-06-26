@@ -1,4 +1,4 @@
-import { CONFIG, saveConfig } from './config.js';
+import { CONFIG, saveConfig, loadSecrets } from './config.js';
 
 // 애플리케이션 상태 관리
 let tokenClient;
@@ -79,7 +79,8 @@ window.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
 
-function initApp() {
+async function initApp() {
+  await loadSecrets();
   setupEventListeners();
   loadSavedSettingsToForm();
   checkApiSetup();
