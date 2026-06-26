@@ -1382,7 +1382,7 @@ function setupEventListeners() {
   googleLoginBtn.addEventListener('click', () => {
     if (tokenClient) {
       tokenClient.callback = handleAuthCallback;
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
     } else {
       alert('구글 API 설정이 부족합니다. 설정을 완료해 주세요.');
     }
