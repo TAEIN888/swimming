@@ -68,7 +68,10 @@ const inpMemberId = document.getElementById('member-id');
 const inpMemberName = document.getElementById('member-name');
 const inpMemberPhone = document.getElementById('member-phone');
 const inpMemberJoined = document.getElementById('member-joined');
-const inpMemberCoach = document.getElementById('member-coach');
+const inpMemberGender = document.getElementById('member-gender');
+const inpMemberAge = document.getElementById('member-age');
+const inpMemberIsAdult = document.getElementById('member-is-adult');
+const inpMemberStatus = document.getElementById('member-status');
 const inpMemberMemo = document.getElementById('member-memo');
 const btnAddMember = document.getElementById('btn-add-member');
 const memberFilterInput = document.getElementById('member-filter-input');
@@ -2165,10 +2168,10 @@ async function checkOrCreateMemberSheet() {
       // 헤더 추가
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: spreadsheetId,
-        range: '회원목록!A1:F1',
+        range: '회원목록!A1:I1',
         valueInputOption: 'USER_ENTERED',
         resource: {
-          values: [['ID', '이름', '연락처', '등록일', '담당강사', '메모']]
+          values: [['ID', '이름', '성별', '나이', '성인여부', '연락처', '등록일', '메모', '상태']]
         }
       });
       console.log("'회원목록' 시트 및 헤더 생성이 완료되었습니다.");
@@ -2192,7 +2195,7 @@ async function loadMemberList() {
     const spreadsheetId = CONFIG.getSpreadsheetId();
     const response = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
-      range: '회원목록!A2:F1000'
+      range: '회원목록!A2:I1000'
     });
     
     const rows = response.result.values || [];
@@ -2201,10 +2204,13 @@ async function loadMemberList() {
         rowIndex: index + 2, // 1-based index 이며 헤더가 1행이므로 +2
         id: row[0] || '',
         name: row[1] || '',
-        phone: row[2] || '',
-        joinedDate: row[3] || '',
-        coach: row[4] || '',
-        memo: row[5] || ''
+        gender: row[2] || '',
+        age: row[3] || '',
+        isAdult: row[4] || '',
+        phone: row[5] || '',
+        joinedDate: row[6] || '',
+        memo: row[7] || '',
+        status: row[8] || ''
       };
     }).filter(member => member.id !== ''); // 빈 행 제거
     
@@ -2238,13 +2244,41 @@ function renderMembersTable() {
   filteredMembers.forEach(member => {
     const tr = document.createElement('tr');
     
+    // 상태에 따른 뱃지 스타일 분기
+    let statusBadgeColor = 'var(--text-muted)';
+    let statusBadgeBg = 'rgba(15, 23, 42, 0.05)';
+    if (member.status === '등록') {
+      statusBadgeColor = 'var(--color-primary)';
+      statusBadgeBg = 'rgba(99, 102, 241, 0.08)';
+    } else if (member.status === '대기') {
+      statusBadgeColor = '#f59e0b';
+      statusBadgeBg = 'rgba(245, 158, 11, 0.08)';
+    } else if (member.status === '만료') {
+      statusBadgeColor = '#ef4444';
+      statusBadgeBg = 'rgba(239, 68, 68, 0.08)';
+    } else if (member.status === '중단') {
+      statusBadgeColor = '#6b7280';
+      statusBadgeBg = 'rgba(107, 114, 128, 0.08)';
+    }
+    
     tr.innerHTML = `
       <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(member.name)}</td>
+      <td>${escapeHtml(member.gender || '남성')}</td>
+      <td>${escapeHtml(member.age ? member.age + '세' : '-')}</td>
+      <td>
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-secondary); background-color: rgba(6, 182, 212, 0.06); padding: 2px 6px; border-radius: 4px;">
+          ${escapeHtml(member.isAdult || '성인')}
+        </span>
+      </td>
       <td><span class="member-phone-number">${escapeHtml(member.phone)}</span></td>
       <td>${escapeHtml(member.joinedDate)}</td>
-      <td><span style="font-weight: 500; color: var(--color-primary);">${escapeHtml(member.coach || '(미지정)')}</span></td>
-      <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(member.memo)}">
+      <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(member.memo)}">
         ${escapeHtml(member.memo)}
+      </td>
+      <td>
+        <span style="font-size: 0.75rem; font-weight: 700; color: ${statusBadgeColor}; background-color: ${statusBadgeBg}; padding: 2px 8px; border-radius: 20px;">
+          ${escapeHtml(member.status || '등록')}
+        </span>
       </td>
       <td style="text-align: center;">
         <button class="members-action-btn edit" data-id="${member.id}" title="수정">
@@ -2287,15 +2321,17 @@ function openMemberFormForNew() {
     inpMemberJoined.value = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   }
   
-  // 담당 강사 드롭다운 옵션 동적 갱신
-  populateCoachDropdown();
+  if (inpMemberGender) inpMemberGender.value = '남성';
+  if (inpMemberAge) inpMemberAge.value = '';
+  if (inpMemberIsAdult) inpMemberIsAdult.value = '성인';
+  if (inpMemberStatus) inpMemberStatus.value = '등록';
   
   openModal(memberBackdrop);
 }
 
 // 5. 회원 등록/수정 모달 열기 (수정)
 function openMemberFormForEdit(memberId) {
-  if (!memberBackdrop || !memberModalTitle || !inpMemberId || !inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberCoach || !inpMemberMemo) return;
+  if (!memberBackdrop || !memberModalTitle || !inpMemberId || !inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberGender || !inpMemberAge || !inpMemberIsAdult || !inpMemberStatus || !inpMemberMemo) return;
   
   const member = cachedMembers.find(m => m.id === memberId);
   if (!member) {
@@ -2308,65 +2344,29 @@ function openMemberFormForEdit(memberId) {
   inpMemberName.value = member.name;
   inpMemberPhone.value = member.phone;
   inpMemberJoined.value = member.joinedDate;
+  inpMemberGender.value = member.gender || '남성';
+  inpMemberAge.value = member.age || '';
+  inpMemberIsAdult.value = member.isAdult || '성인';
+  inpMemberStatus.value = member.status || '등록';
   inpMemberMemo.value = member.memo;
-  
-  // 담당 강사 드롭다운 갱신 후 선택값 복원
-  populateCoachDropdown();
-  inpMemberCoach.value = member.coach;
   
   openModal(memberBackdrop);
 }
 
-// 6. 강사 드롭다운 바인딩 헬퍼
-function populateCoachDropdown() {
-  if (!inpMemberCoach) return;
-  
-  // 첫 옵션(없음)을 제외하고 비우기
-  inpMemberCoach.innerHTML = '<option value="">(없음 / 미지정)</option>';
-  
-  // allCalendars 또는 사이드바의 체크박스에서 강사 목록을 추출
-  const coaches = [];
-  
-  // 캘린더 목록 컨테이너에서 강사 이름 파싱
-  const checkboxes = document.querySelectorAll('.calendar-checkbox-item input[type="checkbox"]');
-  checkboxes.forEach(cb => {
-    const coachName = cb.getAttribute('data-summary');
-    const isOther = cb.closest('.calendar-checkbox-item').classList.contains('is-other');
-    // 'is-other' 클래스가 없는 것이 강사 캘린더
-    if (coachName && !isOther && !coaches.includes(coachName)) {
-      coaches.push(coachName);
-    }
-  });
-  
-  // 만약 체크박스에서 추출되지 않는다면 allCalendars에서 백업
-  if (coaches.length === 0 && allCalendars) {
-    allCalendars.forEach(cal => {
-      // 강사 캘린더 판정 조건 (기본/마스터 캘린더가 아니거나 적절한 강사 이름인 경우)
-      if (cal.summary && cal.id !== CONFIG.getCalendarId() && cal.id !== 'primary') {
-        coaches.push(cal.summary);
-      }
-    });
-  }
-  
-  coaches.sort().forEach(coach => {
-    const option = document.createElement('option');
-    option.value = coach;
-    option.textContent = coach;
-    inpMemberCoach.appendChild(option);
-  });
-}
-
-// 7. 회원 저장 (Create & Update)
+// 6. 회원 저장 (Create & Update)
 async function saveMemberData(e) {
   e.preventDefault();
   
-  if (!inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberCoach || !inpMemberMemo) return;
+  if (!inpMemberName || !inpMemberPhone || !inpMemberJoined || !inpMemberGender || !inpMemberAge || !inpMemberIsAdult || !inpMemberStatus || !inpMemberMemo) return;
   
   const memberId = inpMemberId.value.trim();
   const memberName = inpMemberName.value.trim();
   const memberPhone = inpMemberPhone.value.trim();
   const memberJoined = inpMemberJoined.value.trim();
-  const memberCoach = inpMemberCoach.value;
+  const memberGender = inpMemberGender.value;
+  const memberAge = inpMemberAge.value.trim();
+  const memberIsAdult = inpMemberIsAdult.value;
+  const memberStatus = inpMemberStatus.value;
   const memberMemo = inpMemberMemo.value.trim();
   
   if (!memberName) {
@@ -2384,7 +2384,7 @@ async function saveMemberData(e) {
     if (!memberId) {
       // 신규 등록 (Create)
       const newId = 'MEM-' + Date.now();
-      const newRowValues = [[newId, memberName, memberPhone, memberJoined, memberCoach, memberMemo]];
+      const newRowValues = [[newId, memberName, memberGender, memberAge, memberIsAdult, memberPhone, memberJoined, memberMemo, memberStatus]];
       
       await gapi.client.sheets.spreadsheets.values.append({
         spreadsheetId: spreadsheetId,
@@ -2403,11 +2403,11 @@ async function saveMemberData(e) {
       }
       
       const rowIndex = member.rowIndex;
-      const updatedRowValues = [[memberId, memberName, memberPhone, memberJoined, memberCoach, memberMemo]];
+      const updatedRowValues = [[memberId, memberName, memberGender, memberAge, memberIsAdult, memberPhone, memberJoined, memberMemo, memberStatus]];
       
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: spreadsheetId,
-        range: `회원목록!A${rowIndex}:F${rowIndex}`,
+        range: `회원목록!A${rowIndex}:I${rowIndex}`,
         valueInputOption: 'USER_ENTERED',
         resource: {
           values: updatedRowValues
@@ -2426,7 +2426,7 @@ async function saveMemberData(e) {
   }
 }
 
-// 8. 회원 삭제 컨펌 및 수행 (Delete)
+// 7. 회원 삭제 컨펌 및 수행 (Delete)
 function confirmDeleteMember(memberId, memberName) {
   if (confirm(`"${memberName}" 회원을 정말로 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`)) {
     executeDeleteMember(memberId);
@@ -2499,7 +2499,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// 9. 회원 관리 이벤트 바인딩
+// 8. 회원 관리 이벤트 바인딩
 if (btnAddMember) {
   btnAddMember.addEventListener('click', openMemberFormForNew);
 }
