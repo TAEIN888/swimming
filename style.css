@@ -496,7 +496,7 @@ body {
 
 .fc {
   font-family: var(--font-body) !important;
-  --fc-slot-min-height: 48px !important; /* 각 그리드 칸의 세로 높이를 늘려 일정 텍스트 찌그러짐 및 스크롤바 방지 */
+  --fc-slot-min-height: 56px !important; /* 각 그리드 칸의 세로 높이를 늘려 일정 텍스트 찌그러짐 및 스크롤바 방지 */
 }
 
 /* 캘린더 내부 테두리선 */
@@ -529,6 +529,11 @@ body {
   color: var(--text-muted) !important;
   padding: 0 10px !important;
   letter-spacing: -0.2px;
+}
+
+/* 주간/일간 캘린더 시간 슬롯(30분 단위) 높이 확보 */
+.fc .fc-timegrid-slot {
+  height: 2.4rem !important; 
 }
 
 /* 종일(all-day) 라벨 스타일 (레이아웃 침범 방지를 위해 배지 스타일을 제거하고 폰트만 조율) */
@@ -603,25 +608,26 @@ body {
   padding: 10px 0 !important;
 }
 
-/* 달력 일정 카드 디자인 (CSS 기본틀) */
-/* 캘린더 일정 자체의 기본 테두리 및 배경 투명화 처리 (커스텀 카드가 그리도록 유도) */
-.fc-event {
-  background-color: transparent !important;
+
+/* 주간/일간 시간축 뷰 내의 이벤트 텍스트 색상 및 가독성 강제 (진한 원색 텍스트 적용) */
+.fc-timegrid-event .fc-event-main {
+  color: inherit !important; /* 부모(info.el)에 직접 주입된 선명한 오리지널 원색을 상속받음 */
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  padding: 4px 6px !important;
+}
+
+/* 월간 뷰 등 다른 뷰의 이벤트 텍스트 스타일 방어 (흰색 배경에 글씨가 안보이는 현상 방지) */
+.fc-daygrid-event {
+  background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-  overflow: visible !important;
+  margin: 1px 0 !important;
 }
-
-/* 일간/주간 뷰(TimeGrid) 내의 이벤트 카드 높이가 찌그러지지 않고 100% 채워지도록 설정 */
-.fc-timegrid-event,
-.fc-v-event,
-.fc-v-event .fc-event-main,
-.fc-v-event .fc-event-main-frame {
-  height: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 !important;
+.fc-daygrid-event .fc-event-main {
+  color: var(--text-main, #0f172a) !important; /* 기본 어두운 글자색 적용 */
+  width: 100%;
 }
 
 /* 월별 캘린더 일정 카드 스타일 */
@@ -641,8 +647,8 @@ body {
 }
 
 .fc-daygrid-event:hover .month-event-item {
-  background: #ffffff;
-  border-color: rgba(99, 102, 241, 0.2);
+  filter: brightness(0.96);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
 }
 
 .month-event-time {
@@ -710,9 +716,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  height: 100%;
+  height: auto !important;
+  min-height: 100%;
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 5;
 }
 
 .merged-events-time {
@@ -731,7 +740,7 @@ body {
   flex-direction: column;
   gap: 2px;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: visible;
 }
 
 .merged-events-list::-webkit-scrollbar {
@@ -1252,12 +1261,31 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.retention-stat-item:hover {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.retention-stat-item.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.retention-stat-item.active span {
+  color: var(--color-primary) !important;
 }
 
 .retention-stat-item span {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-main);
+  transition: color 0.25s ease;
 }
 
 .retention-members-toggle {
@@ -1303,14 +1331,14 @@ body {
 }
 
 .retention-member-name {
-  width: 65px;
+  width: 60px;
   font-weight: 600;
   color: var(--text-main);
   flex-shrink: 0;
 }
 
 .retention-member-lessons {
-  width: 100px;
+  width: 80px;
   color: var(--text-muted);
   font-size: 0.72rem;
   flex-shrink: 0;

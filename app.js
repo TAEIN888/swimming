@@ -13,11 +13,13 @@ let allCalendars = [];
 let selectedCalendarIds = new Set();
 let lastViewType = null;
 const googleEventsCache = new Map();
+let dashboardEventsCache = null;
 
 // 캘린더 새로고침 및 캐시 초기화 헬퍼 함수
 function refetchCalendarEvents(clearCache = false) {
   if (clearCache) {
     googleEventsCache.clear();
+    dashboardEventsCache = null;
   }
   if (calendar) {
     calendar.refetchEvents();
@@ -343,7 +345,7 @@ async function fetchCalendarList() {
         } else {
           selectedCalendarIds.delete(calId);
         }
-        refetchCalendarEvents(false);
+        refetchCalendarEvents(true);
       });
       
       if (isMyCal) {
@@ -472,7 +474,7 @@ function initCalendar() {
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
-      right: 'dayGridMonth,timeGridWeek,timeGridDay'
+      right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
     },
     locale: 'ko',
     timeZone: 'local',
@@ -481,6 +483,7 @@ function initCalendar() {
     eventDisplay: 'block',   // 모든 일정을 꽉 찬 색상 블록(바 형태)으로 강제 적용
     dayMaxEvents: 6,         // 하루에 보여줄 최대 일정 수 (넘어가면 '+더보기' 버튼 제공)
     allDayText: '종일',
+    eventMinHeight: 38,
     events: fetchGoogleEvents,
     eventContent: renderEventContent,
     eventClick: handleEventClick,
@@ -497,7 +500,7 @@ function initCalendar() {
       }
     },
     eventDidMount: function(info) {
-      const isTimeGrid = calendar && calendar.view && calendar.view.type.startsWith('timeGrid');
+      const isTimeGrid = info.view && info.view.type.startsWith('timeGrid');
       if (!isTimeGrid || info.event.extendedProps.isMerged) {
         info.el.style.backgroundColor = 'transparent';
         info.el.style.border = 'none';
@@ -506,6 +509,7 @@ function initCalendar() {
       }
       const color = info.event.backgroundColor || '#6366f1';
       info.el.style.setProperty('--event-color', color);
+      info.el.style.color = color;
       let r = 99, g = 102, b = 241;
       if (color.startsWith('#')) {
         const hex = color.replace('#', '');
@@ -577,6 +581,7 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
           timeMax: fetchInfo.end.toISOString(),
           singleEvents: true,
           orderBy: 'startTime',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         
         const items = response.result.items || [];
@@ -646,56 +651,129 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
     const results = await Promise.all(fetchPromises);
     const mergedEvents = results.flat();
     
-    // 대시보드 실시간 통계 업데이트
-    updateDashboardStats(mergedEvents);
+    // 대시보드 실시간 통계 업데이트 (독립적 백그라운드 갱신)
+    fetchAndRefreshDashboardStats(false);
     
-    // 주간/일간 시간축 뷰(timeGrid)인 경우 동일 시간대 일정을 하나로 묶기
-    const viewType = (this && this.view) ? this.view.type : (calendar && calendar.view ? calendar.view.type : '');
-    const isTimeGrid = viewType.startsWith('timeGrid');
-    const finalEvents = [];
-    
-    if (isTimeGrid) {
-      const grouped = {};
-      mergedEvents.forEach(evt => {
-        const startMs = new Date(evt.start).getTime();
-        const endMs = new Date(evt.end).getTime();
-        const key = `${startMs}_${endMs}`;
-        if (!grouped[key]) {
-          grouped[key] = [];
-        }
-        grouped[key].push(evt);
-      });
-      
-      Object.keys(grouped).forEach(key => {
-        const group = grouped[key];
-        if (group.length === 1) {
-          finalEvents.push(group[0]);
-        } else {
-          const first = group[0];
-          finalEvents.push({
-            id: `merged_${key}`,
-            title: `${group.length}개 수업`,
-            start: first.start,
-            end: first.end,
-            editable: false, // 병합된 일정은 개별 드래그 비활성화
-            backgroundColor: 'transparent',
-            borderColor: 'transparent',
-            extendedProps: {
-              isMerged: true,
-              subEvents: group,
-              calendarId: first.extendedProps.calendarId
-            }
-          });
-        }
-      });
-    } else {
-      finalEvents.push(...mergedEvents);
-    }
-    
-    successCallback(finalEvents);
+    successCallback(mergedEvents);
   } catch (err) {
     console.error('Error fetching google events:', err);
+    
+    // 임시 디버깅용: 화면에 캘린더 로딩 에러 배너 강제 주입
+    const debugBannerId = 'calendar-debug-err-banner';
+    let errBanner = document.getElementById(debugBannerId);
+    if (!errBanner) {
+      errBanner = document.createElement('div');
+      errBanner.id = debugBannerId;
+      errBanner.style.cssText = 'position:fixed; top:40px; left:0; width:100%; background:#f97316; color:white; padding:12px 18px; z-index:999999; font-family:monospace; font-size:13px; font-weight:bold; box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+      document.body.appendChild(errBanner);
+    }
+    errBanner.innerHTML = '[Calendar Load Failed] ' + (err.stack || err.message || err.toString());
+    
     failureCallback(err);
+  }
+}
+
+// 대시보드 전용 오늘/이번주 일정 백그라운드 로드 및 통계 갱신 함수
+async function fetchAndRefreshDashboardStats(forceRefresh = false) {
+  if (!forceRefresh && dashboardEventsCache) {
+    updateDashboardStats(dashboardEventsCache);
+    return;
+  }
+  
+  // 강사 캘린더 추출 ('**헤엄하다_' 로 시작하는 목록)
+  const coachCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
+  if (coachCalendars.length === 0) {
+    updateDashboardStats([]);
+    return;
+  }
+  
+  // 이번주 일요일 00:00:00 ~ 이번주 토요일 23:59:59 범위 산출 (로컬 시간 기준)
+  const curr = new Date();
+  const first = curr.getDate() - curr.getDay(); // 이번주 일요일
+  const last = first + 6; // 이번주 토요일
+  
+  const startOfWeek = new Date(new Date(curr).setDate(first));
+  const endOfWeek = new Date(new Date(curr).setDate(last));
+  startOfWeek.setHours(0, 0, 0, 0);
+  endOfWeek.setHours(23, 59, 59, 999);
+  
+  try {
+    const fetchPromises = coachCalendars.map(async (cal) => {
+      try {
+        const response = await gapi.client.calendar.events.list({
+          calendarId: cal.id,
+          timeMin: startOfWeek.toISOString(),
+          timeMax: endOfWeek.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+        
+        const items = response.result.items || [];
+        return items.map(gEvent => {
+          const start = gEvent.start.dateTime || gEvent.start.date;
+          const end = gEvent.end.dateTime || gEvent.end.date;
+          
+          let memberName = '';
+          let coachName = '';
+          if (gEvent.description) {
+            const memberMatch = gEvent.description.match(/회원:\s*(.*)/);
+            const coachMatch = gEvent.description.match(/강사:\s*(.*)/);
+            if (memberMatch) memberName = memberMatch[1];
+            if (coachMatch) coachName = coachMatch[1];
+            
+            if (!memberMatch && !coachMatch) {
+              const oldMatch = gEvent.description.match(/담당\/회원:\s*(.*)/);
+              if (oldMatch) {
+                const oldVal = oldMatch[1];
+                if (oldVal.includes('/')) {
+                  const parts = oldVal.split('/');
+                  memberName = parts[0].trim();
+                  coachName = parts[1].trim();
+                } else {
+                  memberName = oldVal.trim();
+                }
+              }
+            }
+          }
+          
+          let eventColor = cal.backgroundColor || '#3b82f6';
+          if (gEvent.colorId) {
+            if (gEvent.colorId === '7') eventColor = '#06b6d4';
+            else if (gEvent.colorId === '4') eventColor = '#8b5cf6';
+            else if (gEvent.colorId === '11') eventColor = '#ec4899';
+            else if (gEvent.colorId === '5') eventColor = '#f59e0b';
+          }
+          
+          return {
+            id: gEvent.id,
+            title: gEvent.summary,
+            start: start,
+            end: end,
+            backgroundColor: eventColor,
+            borderColor: eventColor,
+            extendedProps: {
+              memberName: memberName,
+              coachName: coachName,
+              colorVal: eventColor,
+              googleColorId: gEvent.colorId || '',
+              calendarId: cal.id
+            }
+          };
+        });
+      } catch (err) {
+        console.warn(`대시보드용 캘린더 ${cal.id} 로드 실패`, err);
+        return [];
+      }
+    });
+    
+    const results = await Promise.all(fetchPromises);
+    const mergedEvents = results.flat();
+    
+    dashboardEventsCache = mergedEvents;
+    updateDashboardStats(mergedEvents);
+  } catch (err) {
+    console.error('Error fetching dashboard events:', err);
   }
 }
 
@@ -714,7 +792,8 @@ function updateDashboardStats(events) {
   
   // 1. 오늘의 수업 건수 계산
   const todayClasses = filteredEvents.filter(e => {
-    const startLocalDate = e.start.split('T')[0];
+    const eventDate = new Date(e.start);
+    const startLocalDate = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
     return startLocalDate === todayStr;
   });
   
@@ -960,11 +1039,34 @@ function renderEventContent(arg) {
   if (!isTimeGrid) {
     // 월별 뷰(dayGridMonth) 등에서는 콤팩트하고 이쁜 카드 형태로 렌더링
     const color = event.extendedProps.colorVal || '#6366f1';
+    
+    // 색상의 RGB 값을 파싱하여 파스텔톤 투명 배경 및 테두리 구현
+    let r = 99, g = 102, b = 241;
+    if (color.startsWith('#')) {
+      const hex = color.replace('#', '');
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+      }
+    } else if (color.startsWith('rgb')) {
+      const rgbVals = color.match(/\d+/g);
+      if (rgbVals && rgbVals.length >= 3) {
+        r = parseInt(rgbVals[0], 10);
+        g = parseInt(rgbVals[1], 10);
+        b = parseInt(rgbVals[2], 10);
+      }
+    }
+    
     return {
       html: `
-        <div class="month-event-item" style="border-left: 2px solid ${color};">
-          ${arg.timeText ? `<span class="month-event-time">${arg.timeText}</span>` : ''}
-          <span class="month-event-title" title="${event.title}">${event.title}</span>
+        <div class="month-event-item" style="border: 1.5px solid ${color}; border-left: 4px solid ${color}; background-color: rgba(${r}, ${g}, ${b}, 0.08);">
+          ${arg.timeText ? `<span class="month-event-time" style="color: ${color}; font-weight: 700;">${arg.timeText}</span>` : ''}
+          <span class="month-event-title" style="color: #1e293b; font-weight: 600;" title="${event.title}">${event.title}</span>
         </div>
       `
     };
@@ -977,9 +1079,24 @@ function renderEventContent(arg) {
     `;
     event.extendedProps.subEvents.forEach((sub, idx) => {
       const color = sub.extendedProps.colorVal || '#6366f1';
+      
+      // 병합된 내부 일정의 경우, FullCalendar가 subEvent 별로 timeText를 따로 주지 않으므로 직접 계산
+      const formatSubTime = (startVal, endVal) => {
+        if (!startVal) return '';
+        const start = new Date(startVal);
+        const end = endVal ? new Date(endVal) : null;
+        const pad = (n) => String(n).padStart(2, '0');
+        const startStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+        if (!end) return startStr;
+        const endStr = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+        return `${startStr} ~ ${endStr}`;
+      };
+      
+      const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color};">
-          <span class="merged-event-title">${sub.title}</span>
+        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px;">
+          <span class="merged-event-time" style="font-size: 0.65rem; font-weight: 600; color: var(--text-muted); line-height: 1.1;">${timeRange}</span>
+          <span class="merged-event-title" style="font-weight: 500; font-size: 0.72rem; line-height: 1.2; word-break: break-all;">${sub.title}</span>
         </div>
       `;
     });
@@ -991,10 +1108,13 @@ function renderEventContent(arg) {
   }
   
   const color = event.extendedProps.colorVal || '#6366f1';
+  // FullCalendar가 로컬 타임존 및 설정(eventTimeFormat)에 맞게 파싱한 공식 timeText를 사용합니다.
+  const displayTime = arg.timeText ? arg.timeText.replace(' - ', ' ~ ') : '';
   return {
     html: `
-      <div class="single-event-container" style="border-left: 3px solid ${color};">
-        <span class="single-event-title">${event.title}</span>
+      <div class="single-event-container" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; height: 100%;">
+        <span class="single-event-time" style="font-size: 0.65rem; font-weight: 600; color: var(--text-muted); line-height: 1.1;">${displayTime}</span>
+        <span class="single-event-title" style="font-weight: 500; font-size: 0.72rem; line-height: 1.2; word-break: break-all;">${event.title}</span>
       </div>
     `
   };
@@ -1276,7 +1396,7 @@ function setupEventListeners() {
         }
       }
     });
-    refetchCalendarEvents(false);
+    refetchCalendarEvents(true);
   });
 
   document.getElementById('btn-cal-deselect-all').addEventListener('click', () => {
@@ -1294,7 +1414,7 @@ function setupEventListeners() {
         selectedCalendarIds.delete(cb.getAttribute('data-id'));
       }
     });
-    refetchCalendarEvents(false);
+    refetchCalendarEvents(true);
   });
 
   // 상단 탭 메뉴 전환 이벤트 리스너 추가
@@ -1302,20 +1422,25 @@ function setupEventListeners() {
   const tabLessonsCalendar = document.getElementById('tab-lessons-calendar');
   const tabCoaches = document.getElementById('tab-coaches');
   const tabRetention = document.getElementById('tab-retention');
+  const tabMemberSearch = document.getElementById('tab-member-search');
   const calendarViewCard = document.getElementById('calendar-view-card');
   const coachesViewCard = document.getElementById('coaches-view-card');
   const retentionViewCard = document.getElementById('retention-view-card');
+  const memberSearchViewCard = document.getElementById('member-search-view-card');
   
-  if (tabCalendar && tabLessonsCalendar && tabCoaches && tabRetention && calendarViewCard && coachesViewCard && retentionViewCard) {
+  if (tabCalendar && tabLessonsCalendar && tabCoaches && tabRetention && tabMemberSearch && 
+      calendarViewCard && coachesViewCard && retentionViewCard && memberSearchViewCard) {
     tabCalendar.addEventListener('click', () => {
       tabCalendar.classList.add('active');
       tabLessonsCalendar.classList.remove('active');
       tabCoaches.classList.remove('active');
       tabRetention.classList.remove('active');
+      tabMemberSearch.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'block';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'none';
+      memberSearchViewCard.style.display = 'none';
       updateSidebarVisibility();
       refetchCalendarEvents(false);
     });
@@ -1325,10 +1450,12 @@ function setupEventListeners() {
       tabLessonsCalendar.classList.add('active');
       tabCoaches.classList.remove('active');
       tabRetention.classList.remove('active');
+      tabMemberSearch.classList.remove('active');
       document.body.classList.add('lessons-calendar-mode');
       calendarViewCard.style.display = 'block';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'none';
+      memberSearchViewCard.style.display = 'none';
       updateSidebarVisibility();
       refetchCalendarEvents(false);
     });
@@ -1338,10 +1465,12 @@ function setupEventListeners() {
       tabCalendar.classList.remove('active');
       tabLessonsCalendar.classList.remove('active');
       tabRetention.classList.remove('active');
+      tabMemberSearch.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'none';
       coachesViewCard.style.display = 'flex';
       retentionViewCard.style.display = 'none';
+      memberSearchViewCard.style.display = 'none';
       updateSidebarVisibility();
     });
     
@@ -1350,14 +1479,55 @@ function setupEventListeners() {
       tabCalendar.classList.remove('active');
       tabLessonsCalendar.classList.remove('active');
       tabCoaches.classList.remove('active');
+      tabMemberSearch.classList.remove('active');
       document.body.classList.remove('lessons-calendar-mode');
       calendarViewCard.style.display = 'none';
       coachesViewCard.style.display = 'none';
       retentionViewCard.style.display = 'flex';
+      memberSearchViewCard.style.display = 'none';
       updateSidebarVisibility();
       loadRetentionData();
     });
+
+    tabMemberSearch.addEventListener('click', () => {
+      tabMemberSearch.classList.add('active');
+      tabCalendar.classList.remove('active');
+      tabLessonsCalendar.classList.remove('active');
+      tabCoaches.classList.remove('active');
+      tabRetention.classList.remove('active');
+      document.body.classList.remove('lessons-calendar-mode');
+      calendarViewCard.style.display = 'none';
+      coachesViewCard.style.display = 'none';
+      retentionViewCard.style.display = 'none';
+      memberSearchViewCard.style.display = 'flex';
+      updateSidebarVisibility();
+      
+      const searchInput = document.getElementById('member-search-input');
+      if (searchInput) searchInput.focus();
+    });
   }
+
+  // ESC 키를 눌렀을 때 활성화된 모달을 닫는 리스너 추가 (이벤트 전파 방지 적용)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      let isModalClosed = false;
+      
+      if (eventBackdrop.classList.contains('active')) {
+        closeModal(eventBackdrop);
+        isModalClosed = true;
+      }
+      if (settingsBackdrop.classList.contains('active')) {
+        closeModal(settingsBackdrop);
+        isModalClosed = true;
+      }
+      
+      // 모달이 열려 있어서 닫았다면, Escape 키 이벤트가 전파되어 FullCalendar 더보기 팝업까지 한꺼번에 닫히는 것을 방지
+      if (isModalClosed) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }
+  }, true);
 }
 
 // 14. 강사별 재등록율 데이터 로드 및 계산
@@ -1382,18 +1552,20 @@ async function loadRetentionData() {
       return;
     }
     
-    // 분석할 과거 범위 설정 (최근 6개월)
+    // 분석할 범위 설정 (과거 6개월 ~ 미래 6개월)
     const now = new Date();
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(now.getMonth() - 6);
+    const sixMonthsAhead = new Date();
+    sixMonthsAhead.setMonth(now.getMonth() + 6);
     
-    // 각 강사 캘린더로부터 6개월치의 일정을 병렬로 로드
+    // 각 강사 캘린더로부터 과거 6개월 ~ 미래 6개월치의 일정을 병렬로 로드
     const fetchPromises = coachCalendars.map(async (cal) => {
       try {
         const response = await gapi.client.calendar.events.list({
           calendarId: cal.id,
           timeMin: sixMonthsAgo.toISOString(),
-          timeMax: now.toISOString(),
+          timeMax: sixMonthsAhead.toISOString(),
           singleEvents: true,
           orderBy: 'startTime',
           maxResults: 2500
@@ -1499,8 +1671,20 @@ async function loadRetentionData() {
           packageCount = 1;
         }
         
-        if (lastCurrent !== -1 && lastTotal !== -1) {
-          maxSessionInfo = `현재: ${lastCurrent}/${lastTotal}회차`;
+        // 오늘 날짜 기준 현재 진행중인 수업 회차 계산
+        let activeSessionInfo = '회차 정보 없음';
+        const todayLimit = new Date();
+        const pastOrTodayLessons = lessons.filter(l => l.date <= todayLimit && l.current !== null && l.total !== null);
+        
+        if (pastOrTodayLessons.length > 0) {
+          const latestPast = pastOrTodayLessons[pastOrTodayLessons.length - 1];
+          activeSessionInfo = `현재: ${latestPast.current}/${latestPast.total}회차`;
+        } else {
+          const futureLessons = lessons.filter(l => l.date > todayLimit && l.current !== null && l.total !== null);
+          if (futureLessons.length > 0) {
+            const earliestFuture = futureLessons[0];
+            activeSessionInfo = `현재: ${earliestFuture.current}/${earliestFuture.total}회차 (예정)`;
+          }
         }
         
         totalMembers++;
@@ -1511,7 +1695,7 @@ async function loadRetentionData() {
         memberRetentionStats.push({
           name: mName,
           packageCount: packageCount,
-          status: maxSessionInfo,
+          status: activeSessionInfo,
           totalLessonsCount: lessons.length,
           isReRegistered: packageCount >= 2
         });
@@ -1526,7 +1710,7 @@ async function loadRetentionData() {
       if (memberRetentionStats.length > 0) {
         memberRetentionStats.forEach(mem => {
           memberItemsHtml += `
-            <div class="retention-member-item">
+            <div class="retention-member-item" data-re-registered="${mem.isReRegistered}">
               <span class="retention-member-name">${mem.name}</span>
               <span class="retention-member-lessons">(총 수업 ${mem.totalLessonsCount}회)</span>
               <span class="retention-member-status">${mem.status}</span>
@@ -1557,9 +1741,9 @@ async function loadRetentionData() {
         </div>
         
         <div class="retention-stats">
-          <div class="retention-stat-item">전체 회원<span>${totalMembers}명</span></div>
-          <div class="retention-stat-item">재등록 회원<span>${reRegisteredCount}명</span></div>
-          <div class="retention-stat-item">신규/단건<span>${singleCount}명</span></div>
+          <div class="retention-stat-item active" data-filter="all">전체 회원<span>${totalMembers}명</span></div>
+          <div class="retention-stat-item" data-filter="re">재등록 회원<span>${reRegisteredCount}명</span></div>
+          <div class="retention-stat-item" data-filter="single">신규/단건<span>${singleCount}명</span></div>
         </div>
         
         <div class="retention-members-toggle" data-cal-id="${res.cal.id}" style="color: ${calColor};">
@@ -1590,6 +1774,44 @@ async function loadRetentionData() {
         }
       });
     });
+
+    // 통계 항목 필터 및 라벨 활성화 리스너 바인딩
+    gridEl.querySelectorAll('.retention-card').forEach(card => {
+      const statItems = card.querySelectorAll('.retention-stat-item');
+      const listEl = card.querySelector('.retention-members-list');
+      const toggleBtn = card.querySelector('.retention-members-toggle');
+      const iconEl = toggleBtn ? toggleBtn.querySelector('i') : null;
+      
+      statItems.forEach(item => {
+        item.addEventListener('click', () => {
+          const filter = item.getAttribute('data-filter');
+          
+          // active 클래스 리셋 및 부여
+          statItems.forEach(si => si.classList.remove('active'));
+          item.classList.add('active');
+          
+          // 회원 목록이 닫혀있다면 강제로 열어줌
+          if (listEl) {
+            listEl.style.display = 'flex';
+            if (iconEl) iconEl.className = 'fa-solid fa-chevron-up';
+          }
+          
+          // 회원 목록 조건부 필터링
+          const memberItems = card.querySelectorAll('.retention-member-item');
+          memberItems.forEach(mItem => {
+            const isReRegistered = mItem.getAttribute('data-re-registered') === 'true';
+            
+            if (filter === 'all') {
+              mItem.style.display = 'flex';
+            } else if (filter === 're') {
+              mItem.style.display = isReRegistered ? 'flex' : 'none';
+            } else if (filter === 'single') {
+              mItem.style.display = !isReRegistered ? 'flex' : 'none';
+            }
+          });
+        });
+      });
+    });
     
     loadingEl.style.display = 'none';
     contentEl.style.display = 'block';
@@ -1599,4 +1821,204 @@ async function loadRetentionData() {
     loadingEl.style.display = 'none';
     contentEl.style.display = 'block';
   }
+}
+
+// 15. 회원별 일정 검색 및 조회 함수
+async function performMemberSearch() {
+  const queryInput = document.getElementById('member-search-input');
+  const loadingEl = document.getElementById('member-search-loading');
+  const resultEl = document.getElementById('member-search-result');
+  const tbodyEl = document.getElementById('member-search-tbody');
+  const summaryEl = document.getElementById('member-search-result-summary');
+  
+  if (!queryInput || !loadingEl || !resultEl || !tbodyEl || !summaryEl) return;
+  
+  const query = queryInput.value.trim();
+  if (!query) {
+    alert('회원 이름을 입력해주세요.');
+    queryInput.focus();
+    return;
+  }
+  
+  loadingEl.style.display = 'block';
+  resultEl.style.display = 'none';
+  tbodyEl.innerHTML = '';
+  
+  try {
+    // 강사 캘린더 추출 ('**헤엄하다_' 로 시작하는 목록)
+    const coachCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
+    if (coachCalendars.length === 0) {
+      summaryEl.textContent = '조회할 강사 캘린더가 없습니다.';
+      loadingEl.style.display = 'none';
+      resultEl.style.display = 'block';
+      return;
+    }
+    
+    // 분석 범위: 과거 1년 ~ 미래 1년
+    const now = new Date();
+    const startRange = new Date();
+    startRange.setFullYear(now.getFullYear() - 1);
+    const endRange = new Date();
+    endRange.setFullYear(now.getFullYear() + 1);
+    
+    const fetchPromises = coachCalendars.map(async (cal) => {
+      try {
+        const response = await gapi.client.calendar.events.list({
+          calendarId: cal.id,
+          timeMin: startRange.toISOString(),
+          timeMax: endRange.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 2500
+        });
+        return {
+          coachName: cal.summary.replace('**헤엄하다_', ''),
+          events: response.result.items || []
+        };
+      } catch (err) {
+        console.warn(`회원 검색 중 캘린더 로드 실패: ${cal.summary}`, err);
+        return { coachName: cal.summary.replace('**헤엄하다_', ''), events: [] };
+      }
+    });
+    
+    const results = await Promise.all(fetchPromises);
+    const matchedEvents = [];
+    
+    results.forEach(res => {
+      res.events.forEach(gEvent => {
+        let isMatch = false;
+        let memberName = '';
+        
+        // 1. description에서 회원명 매칭
+        if (gEvent.description) {
+          const memberMatch = gEvent.description.match(/회원:\s*(.*)/);
+          if (memberMatch) {
+            memberName = memberMatch[1].trim();
+          } else {
+            const oldMatch = gEvent.description.match(/담당\/회원:\s*(.*)/);
+            if (oldMatch) {
+              const oldVal = oldMatch[1];
+              memberName = oldVal.includes('/') ? oldVal.split('/')[0].trim() : oldVal.trim();
+            }
+          }
+        }
+        
+        // 2. 타이틀에서 회원명 매칭
+        if (!memberName && gEvent.summary) {
+          const titleMatch = gEvent.summary.match(/\]\s*([^\(]+)/);
+          if (titleMatch) {
+            memberName = titleMatch[1].trim();
+          }
+        }
+        
+        // 검색어 포함 여부 확인 (이름 매칭 혹은 이벤트 제목에 검색어 포함 여부)
+        const summaryText = gEvent.summary || '';
+        const descText = gEvent.description || '';
+        if (
+          (memberName && memberName.toLowerCase().includes(query.toLowerCase())) ||
+          summaryText.toLowerCase().includes(query.toLowerCase()) ||
+          descText.toLowerCase().includes(query.toLowerCase())
+        ) {
+          isMatch = true;
+        }
+        
+        if (isMatch) {
+          // 회차 정보 파싱
+          let sessionInfo = '회차 정보 없음';
+          if (gEvent.summary) {
+            const sessionMatch = gEvent.summary.match(/(\d+\/\d+\s*회차)/);
+            if (sessionMatch) {
+              sessionInfo = sessionMatch[1];
+            }
+          }
+          
+          matchedEvents.push({
+            event: gEvent,
+            coachName: itemCoachName(res.coachName, gEvent.description),
+            memberName: memberName || '이름 없음',
+            sessionInfo: sessionInfo,
+            start: new Date(gEvent.start.dateTime || gEvent.start.date),
+            end: new Date(gEvent.end.dateTime || gEvent.end.date)
+          });
+        }
+      });
+    });
+    
+    // 가장 최신 일정이 위로 오도록 내림차순 정렬
+    matchedEvents.sort((a, b) => b.start - a.start);
+    
+    summaryEl.textContent = `'${query}' 검색 결과: 총 ${matchedEvents.length}건의 일정이 검색되었습니다.`;
+    
+    if (matchedEvents.length === 0) {
+      tbodyEl.innerHTML = `
+        <tr>
+          <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">검색된 일정이 없습니다. 회원 이름을 다시 확인해 주세요.</td>
+        </tr>
+      `;
+    } else {
+      const formatDate = (date) => {
+        const days = ['일', '월', '화', '수', '목', '금', '토'];
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} (${days[date.getDay()]})`;
+      };
+      
+      const formatTime = (start, end) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        const startStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+        const endStr = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+        return `${startStr} ~ ${endStr}`;
+      };
+      
+      matchedEvents.forEach(item => {
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid var(--border-color)';
+        row.style.fontSize = '0.85rem';
+        row.innerHTML = `
+          <td style="padding: 12px 16px;">
+            <div style="font-weight: 600; color: var(--text-main);">${formatDate(item.start)}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${formatTime(item.start, item.end)}</div>
+          </td>
+          <td style="padding: 12px 16px; font-weight: 600; color: var(--color-primary);">${item.coachName}</td>
+          <td style="padding: 12px 16px; color: var(--text-main); font-weight: 500;">${item.event.summary || '제목 없음'}</td>
+          <td style="padding: 12px 16px;">
+            <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-secondary); background-color: rgba(6, 182, 212, 0.08); padding: 2px 6px; border-radius: 4px;">
+              ${item.sessionInfo}
+            </span>
+          </td>
+        `;
+        tbodyEl.appendChild(row);
+      });
+    }
+    
+    loadingEl.style.display = 'none';
+    resultEl.style.display = 'block';
+  } catch (err) {
+    console.error('Error performing member search:', err);
+    alert('회원 일정 검색 중 오류가 발생했습니다.');
+    loadingEl.style.display = 'none';
+  }
+}
+
+// 강사 캘린더 매핑에서 본문에 기록된 실제 강사명을 파싱하기 위한 헬퍼 함수
+function itemCoachName(defaultName, description) {
+  if (description) {
+    const coachMatch = description.match(/강사:\s*(.*)/);
+    if (coachMatch) return coachMatch[1].trim();
+  }
+  return defaultName;
+}
+
+// 회원 검색 이벤트 바인딩
+const btnMemberSearch = document.getElementById('btn-member-search');
+const memberSearchInput = document.getElementById('member-search-input');
+
+if (btnMemberSearch) {
+  btnMemberSearch.addEventListener('click', performMemberSearch);
+}
+if (memberSearchInput) {
+  memberSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      performMemberSearch();
+    }
+  });
 }
