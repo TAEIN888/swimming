@@ -128,9 +128,9 @@ async function initApp() {
 
 // 저장된 구글 로그인 세션 자동 복원
 async function attemptSessionRestore() {
-  const savedToken = sessionStorage.getItem('G_ACCESS_TOKEN');
-  const savedUser = sessionStorage.getItem('G_USER_INFO');
-  const savedTokenResponse = sessionStorage.getItem('G_TOKEN_RESPONSE');
+  const savedToken = localStorage.getItem('G_ACCESS_TOKEN');
+  const savedUser = localStorage.getItem('G_USER_INFO');
+  const savedTokenResponse = localStorage.getItem('G_TOKEN_RESPONSE');
   
   if (savedToken && savedUser && savedTokenResponse) {
     console.log('기존 로그인 세션 복원 시도 중...');
@@ -138,32 +138,43 @@ async function attemptSessionRestore() {
       if (gapiInited) {
         clearInterval(checkGapi);
         try {
+          console.log('GAPI 초기화 완료 확인. 세션 복원 적용 시작.');
           accessToken = savedToken;
           currentUser = JSON.parse(savedUser);
-          gapi.client.setToken(JSON.parse(savedTokenResponse));
+          
+          // GAPI의 공식 사양에 맞게 { access_token: accessToken } 객체 형태로 토큰 직접 전달
+          gapi.client.setToken({ access_token: savedToken });
+          console.log('GAPI setToken 적용 완료 (access_token 매핑)');
           
           hideAuthError();
           updateProfileUI();
           showDashboard();
           
+          console.log('캘린더 목록 로드 시도...');
           await fetchCalendarList();
+          
+          console.log('달력 인스턴스 초기화 시도...');
           initCalendar();
+          
           console.log('로그인 세션 복원 완료!');
         } catch (err) {
-          console.warn('세션 복원 실패 (토큰 만료 가능성):', err);
+          console.error('세션 복원 프로세스 중 심각한 예외 발생:', err);
+          console.warn('세션 복원 실패 (토큰 만료 혹은 API 로드 실패):', err);
           clearSession();
           showLoginScreen();
         }
       }
     }, 100);
+  } else {
+    console.log('복원할 기존 세션 정보가 로컬 스토리지에 없습니다.');
   }
 }
 
 // 세션 스토리지 데이터 삭제
 function clearSession() {
-  sessionStorage.removeItem('G_ACCESS_TOKEN');
-  sessionStorage.removeItem('G_USER_INFO');
-  sessionStorage.removeItem('G_TOKEN_RESPONSE');
+  localStorage.removeItem('G_ACCESS_TOKEN');
+  localStorage.removeItem('G_USER_INFO');
+  localStorage.removeItem('G_TOKEN_RESPONSE');
   accessToken = null;
   currentUser = null;
 }
@@ -268,10 +279,10 @@ async function handleAuthCallback(tokenResponse) {
     updateProfileUI();
     showDashboard();
     
-    // 세션 유지용 스토리지 저장
-    sessionStorage.setItem('G_ACCESS_TOKEN', accessToken);
-    sessionStorage.setItem('G_USER_INFO', JSON.stringify(currentUser));
-    sessionStorage.setItem('G_TOKEN_RESPONSE', JSON.stringify(tokenResponse));
+    // 세션 유지용 스토리지 저장 (새로고침 및 탭 닫기에도 보존되도록 localStorage 적용)
+    localStorage.setItem('G_ACCESS_TOKEN', accessToken);
+    localStorage.setItem('G_USER_INFO', JSON.stringify(currentUser));
+    localStorage.setItem('G_TOKEN_RESPONSE', JSON.stringify(tokenResponse));
     
     // 다중 캘린더 목록 조회 및 필터 구성
     await fetchCalendarList();
