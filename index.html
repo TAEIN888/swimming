@@ -213,10 +213,17 @@
           </h3>
         </div>
         
-        <!-- 검색바 영역 -->
-        <div style="display: flex; gap: 10px; margin-bottom: 1.5rem; max-width: 500px;">
-          <input type="text" id="member-search-input" class="form-control" placeholder="회원 이름을 입력하세요 (예: 이서하)" style="flex: 1;">
-          <button id="btn-member-search" class="btn btn-primary" style="padding: 0.6rem 1.5rem;">검색</button>
+        <!-- 검색바 및 일자 범위 입력 영역 -->
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 1.5rem; max-width: 800px; align-items: center;">
+          <input type="text" id="member-search-input" class="form-control" placeholder="회원 이름 입력 (예: 이서하)" style="width: 220px; flex-shrink: 0;">
+          
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <input type="date" id="member-search-start-date" class="form-control" style="width: 145px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+            <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">~</span>
+            <input type="date" id="member-search-end-date" class="form-control" style="width: 145px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+          </div>
+          
+          <button id="btn-member-search" class="btn btn-primary" style="padding: 0.6rem 1.5rem; flex-shrink: 0;">검색</button>
         </div>
         
         <!-- 로딩 스피너 -->

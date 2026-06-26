@@ -1502,6 +1502,25 @@ function setupEventListeners() {
       memberSearchViewCard.style.display = 'flex';
       updateSidebarVisibility();
       
+      // 시작일, 종료일 기본 날짜값 세팅 (오늘 기준 과거 3개월 ~ 미래 3개월)
+      const startDateInput = document.getElementById('member-search-start-date');
+      const endDateInput = document.getElementById('member-search-end-date');
+      if (startDateInput && endDateInput && !startDateInput.value && !endDateInput.value) {
+        const today = new Date();
+        const startVal = new Date();
+        startVal.setMonth(today.getMonth() - 3);
+        const endVal = new Date();
+        endVal.setMonth(today.getMonth() + 3);
+        
+        const formatDate = (date) => {
+          const pad = (n) => String(n).padStart(2, '0');
+          return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+        
+        startDateInput.value = formatDate(startVal);
+        endDateInput.value = formatDate(endVal);
+      }
+      
       const searchInput = document.getElementById('member-search-input');
       if (searchInput) searchInput.focus();
     });
@@ -1854,12 +1873,21 @@ async function performMemberSearch() {
       return;
     }
     
-    // 분석 범위: 과거 1년 ~ 미래 1년
-    const now = new Date();
-    const startRange = new Date();
-    startRange.setFullYear(now.getFullYear() - 1);
-    const endRange = new Date();
-    endRange.setFullYear(now.getFullYear() + 1);
+    // 입력창에서 검색 시작일 및 종료일 가져오기 (기본값: 오늘 기준 과거 3개월 ~ 미래 3개월)
+    const startDateInput = document.getElementById('member-search-start-date');
+    const endDateInput = document.getElementById('member-search-end-date');
+    
+    let startRange = new Date();
+    startRange.setMonth(startRange.getMonth() - 3);
+    let endRange = new Date();
+    endRange.setMonth(endRange.getMonth() + 3);
+    
+    if (startDateInput && startDateInput.value) {
+      startRange = new Date(startDateInput.value + 'T00:00:00');
+    }
+    if (endDateInput && endDateInput.value) {
+      endRange = new Date(endDateInput.value + 'T23:59:59');
+    }
     
     const fetchPromises = coachCalendars.map(async (cal) => {
       try {
