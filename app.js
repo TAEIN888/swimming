@@ -1095,9 +1095,9 @@ function renderEventContent(arg) {
       
       const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px;">
-          <span class="merged-event-time" style="font-size: 0.65rem; font-weight: 600; color: var(--text-muted); line-height: 1.1;">${timeRange}</span>
-          <span class="merged-event-title" style="font-weight: 500; font-size: 0.72rem; line-height: 1.2; word-break: break-all;">${sub.title}</span>
+        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 1px 4px;">
+          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 600; color: var(--text-muted); line-height: 1.0;">${timeRange}</span>
+          <span class="merged-event-title" style="font-weight: 500; font-size: 0.7rem; line-height: 1.1; word-break: break-all;">${sub.title}</span>
         </div>
       `;
     });
@@ -1113,9 +1113,9 @@ function renderEventContent(arg) {
   const displayTime = arg.timeText ? arg.timeText.replace(' - ', ' ~ ') : '';
   return {
     html: `
-      <div class="single-event-container" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; height: 100%;">
-        <span class="single-event-time" style="font-size: 0.65rem; font-weight: 600; color: var(--text-muted); line-height: 1.1;">${displayTime}</span>
-        <span class="single-event-title" style="font-weight: 500; font-size: 0.72rem; line-height: 1.2; word-break: break-all;">${event.title}</span>
+      <div class="single-event-container" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 1px 4px; height: 100%;">
+        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 600; color: var(--text-muted); line-height: 1.0;">${displayTime}</span>
+        <span class="single-event-title" style="font-weight: 500; font-size: 0.7rem; line-height: 1.1; word-break: break-all;">${event.title}</span>
       </div>
     `
   };

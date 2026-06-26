@@ -533,7 +533,7 @@ body {
 
 /* 주간/일간 캘린더 시간 슬롯(30분 단위) 높이 확보 */
 .fc .fc-timegrid-slot {
-  height: 2.4rem !important; 
+  height: 2.8rem !important; 
 }
 
 /* 종일(all-day) 라벨 스타일 (레이아웃 침범 방지를 위해 배지 스타일을 제거하고 폰트만 조율) */
