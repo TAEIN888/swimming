@@ -392,6 +392,7 @@ async function fetchCalendarList() {
       errMsg = JSON.stringify(err);
     }
     calendarListContainer.innerHTML = `<div style="font-size: 0.75rem; color: #ef4444; padding: 4px 8px; line-height: 1.4;">로딩 실패:<br>${errMsg}</div>`;
+    throw err; // 세션 복원 흐름 등에서 에러를 인지할 수 있도록 예외 재발생
   }
 }
 
@@ -1369,8 +1370,12 @@ function setupEventListeners() {
   
   btnLogout.addEventListener('click', () => {
     if (confirm('로그아웃 하시겠습니까?')) {
-      if (accessToken) {
-        google.accounts.oauth2.revokeToken(accessToken, () => {});
+      try {
+        if (accessToken && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+          google.accounts.oauth2.revokeToken(accessToken, () => {});
+        }
+      } catch (revokeErr) {
+        console.warn('OAuth 토큰 폐기(revoke) 중 예외 무시:', revokeErr);
       }
       clearSession();
       showLoginScreen();
