@@ -23,7 +23,7 @@ export const CONFIG = {
   getClientId: () => localStorage.getItem('G_CLIENT_ID') || secrets.clientId || '',
   getApiKey: () => localStorage.getItem('G_API_KEY') || secrets.apiKey || '',
   getCalendarId: () => localStorage.getItem('G_CALENDAR_ID') || secrets.calendarId || 'heumhadas@gmail.com',
-  getSpreadsheetId: () => localStorage.getItem('G_SPREADSHEET_ID') || secrets.spreadsheetId || '17Qe4GjnKHiV6DkbtPht06QnGyWkyPT4_Q466INd8h9c',
+  getSpreadsheetId: () => '17Qe4GjnKHiV6DkbtPht06QnGyWkyPT4_Q466INd8h9c',
   DISCOVERY_DOCS: [
     "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest",
     "https://sheets.googleapis.com/$discovery/rest?version=v4"
@@ -41,7 +41,7 @@ export function saveConfig({ clientId, apiKey, calendarId, spreadsheetId, whitel
   if (clientId !== undefined) localStorage.setItem('G_CLIENT_ID', clientId.trim());
   if (apiKey !== undefined) localStorage.setItem('G_API_KEY', apiKey.trim());
   if (calendarId !== undefined) localStorage.setItem('G_CALENDAR_ID', calendarId.trim() || 'heumhadas@gmail.com');
-  if (spreadsheetId !== undefined) localStorage.setItem('G_SPREADSHEET_ID', spreadsheetId.trim() || '17Qe4GjnKHiV6DkbtPht06QnGyWkyPT4_Q466INd8h9c');
+  // Spreadsheet ID는 '17Qe4GjnKHiV6DkbtPht06QnGyWkyPT4_Q466INd8h9c'로 영구 고정되어 저장하지 않음
   if (whitelistEmails !== undefined) {
     const emailList = whitelistEmails
       .split(',')
