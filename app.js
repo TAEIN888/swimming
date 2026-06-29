@@ -3195,11 +3195,36 @@ async function fetchDeletedEvents() {
   try {
     const response = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
-      range: 'A2:I' // 헤더 제외 A열부터 I열까지 데이터 가져오기
+      range: 'A1:I' // 헤더 포함 전체 데이터 가져오기 (A1부터 시작)
     });
     
     const rows = response.result.values || [];
-    deletedEventsCache = rows.map(row => ({
+    
+    // 만약 완전히 비어있거나 첫 번째 행이 헤더 형태가 아니면 헤더 초기화 진행
+    if (rows.length === 0 || rows[0][0] !== '삭제 일시') {
+      console.log('스프레드시트에 헤더가 존재하지 않거나 비어 있어 초기화를 진행합니다.');
+      
+      // 이미 첫 줄에 잘못 들어간 데이터가 있다면 A2 행으로 이동시켜서 보존
+      if (rows.length > 0 && rows[0][0] !== '삭제 일시') {
+        await gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId: spreadsheetId,
+          range: 'A:I',
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [rows[0]] }
+        });
+        console.log('기존에 1행에 들어있던 일정을 2행 이후로 안전하게 이동시켰습니다.');
+      }
+      
+      await initializeSpreadsheetHeaders(spreadsheetId);
+      
+      // 방금 헤더를 생성했고 캐시는 없으므로 빈 리스트 리턴
+      deletedEventsCache = [];
+      return [];
+    }
+    
+    // 첫 행(헤더)을 제외하고 데이터 매핑
+    const dataRows = rows.slice(1);
+    deletedEventsCache = dataRows.map(row => ({
       deletedAt: row[0] || '',
       calendarId: row[1] || '',
       calendarName: row[2] || '',
@@ -3214,12 +3239,7 @@ async function fetchDeletedEvents() {
     console.log('스프레드시트로부터 로드된 삭제 일정 개수:', deletedEventsCache.length);
     return deletedEventsCache;
   } catch (err) {
-    console.warn('삭제 목록 로드 실패 (시트가 비어있거나 없음). 헤더 초기화를 시도합니다:', err);
-    try {
-      await initializeSpreadsheetHeaders(spreadsheetId);
-    } catch (headerErr) {
-      console.error('스프레드시트 헤더 자동 초기화 실패:', headerErr);
-    }
+    console.error('삭제 목록 로드 중 오류 발생:', err);
     deletedEventsCache = [];
     return [];
   }
