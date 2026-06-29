@@ -543,6 +543,7 @@ function initCalendar() {
       right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
     },
     locale: 'ko',
+    firstDay: 1, // 한주의 시작은 월요일
     timeZone: 'local',
     editable: true,
     selectable: true,
@@ -566,39 +567,10 @@ function initCalendar() {
       }
     },
     eventDidMount: function(info) {
-      const isTimeGrid = info.view && info.view.type.startsWith('timeGrid');
-      if (!isTimeGrid || info.event.extendedProps.isMerged) {
-        info.el.style.backgroundColor = 'transparent';
-        info.el.style.border = 'none';
-        info.el.style.boxShadow = 'none';
-        return;
-      }
-      const color = info.event.backgroundColor || '#6366f1';
-      info.el.style.setProperty('--event-color', color);
-      info.el.style.color = color;
-      let r = 99, g = 102, b = 241;
-      if (color.startsWith('#')) {
-        const hex = color.replace('#', '');
-        if (hex.length === 3) {
-          r = parseInt(hex[0] + hex[0], 16);
-          g = parseInt(hex[1] + hex[1], 16);
-          b = parseInt(hex[2] + hex[2], 16);
-        } else if (hex.length === 6) {
-          r = parseInt(hex.substring(0, 2), 16);
-          g = parseInt(hex.substring(2, 4), 16);
-          b = parseInt(hex.substring(4, 6), 16);
-        }
-      } else if (color.startsWith('rgb')) {
-        const rgbVals = color.match(/\d+/g);
-        if (rgbVals && rgbVals.length >= 3) {
-          r = parseInt(rgbVals[0], 10);
-          g = parseInt(rgbVals[1], 10);
-          b = parseInt(rgbVals[2], 10);
-        }
-      }
-      info.el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.12)`;
-      info.el.style.borderLeft = `3px solid ${color}`;
-      info.el.style.borderColor = 'transparent';
+      // 커스텀 렌더링 카드 스타일이 정상적으로 채워지도록 부모 껍데기 래퍼는 투명화 처리
+      info.el.style.backgroundColor = 'transparent';
+      info.el.style.border = 'none';
+      info.el.style.boxShadow = 'none';
     },
     loading: function(isLoading) {
       const spinner = document.getElementById('loading-spinner');
@@ -1146,12 +1118,11 @@ function renderEventContent(arg) {
   
   if (event.extendedProps.isMerged) {
     let html = `
-      <div class="merged-events-container">
-        <div class="merged-events-list">
+      <div class="merged-events-container" style="background: #ffffff !important; border: 1px solid rgba(15, 23, 42, 0.1) !important; padding: 4px !important; display: flex; flex-direction: column; gap: 4px !important; height: auto !important; min-height: 100%; box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;">
+        <div class="merged-events-list" style="display: flex; flex-direction: column; gap: 4px !important;">
     `;
     event.extendedProps.subEvents.forEach((sub, idx) => {
       const color = sub.extendedProps.colorVal || '#6366f1';
-      const { r, g, b } = parseRgb(color);
       
       // 병합된 내부 일정의 경우, FullCalendar가 subEvent 별로 timeText를 따로 주지 않으므로 직접 계산
       const formatSubTime = (startVal, endVal) => {
@@ -1162,14 +1133,14 @@ function renderEventContent(arg) {
         const startStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
         if (!end) return startStr;
         const endStr = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
-        return `${startStr} ~ ${endStr}`;
+        return `${startStr}-${endStr}`;
       };
       
       const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="border: 1px solid rgba(${r}, ${g}, ${b}, 0.25) !important; border-left: 4px solid ${color} !important; background: rgba(${r}, ${g}, ${b}, 0.08) !important; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; border-radius: 4px; width: 100%;">
-          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 700; color: ${color} !important; line-height: 1.0;">${timeRange}</span>
-          <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.1; word-break: break-all; color: #1e293b;">${sub.title}</span>
+        <div class="merged-event-item" data-idx="${idx}" style="background: ${color} !important; border: none !important; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 6px; border-radius: 4px !important; width: 100%;">
+          <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; word-break: break-all; color: #ffffff !important; display: block; text-align: left;">${sub.title}</span>
+          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left;">${timeRange}</span>
         </div>
       `;
     });
@@ -1181,14 +1152,13 @@ function renderEventContent(arg) {
   }
   
   const color = event.extendedProps.colorVal || '#6366f1';
-  const { r, g, b } = parseRgb(color);
   // FullCalendar가 로컬 타임존 및 설정(eventTimeFormat)에 맞게 파싱한 공식 timeText를 사용합니다.
-  const displayTime = arg.timeText ? arg.timeText.replace(' - ', ' ~ ') : '';
+  const displayTime = arg.timeText ? arg.timeText.replace(' - ', '-') : '';
   return {
     html: `
-      <div class="single-event-container" style="border: 1px solid rgba(${r}, ${g}, ${b}, 0.25) !important; border-left: 4px solid ${color} !important; background: rgba(${r}, ${g}, ${b}, 0.08) !important; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; height: 100%;">
-        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 700; color: ${color} !important; line-height: 1.0;">${displayTime}</span>
-        <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.1; word-break: break-all; color: #1e293b;">${event.title}</span>
+      <div class="single-event-container" style="background: ${color} !important; border: none !important; border-radius: 4px !important; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 6px; height: 100%;">
+        <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; word-break: break-all; color: #ffffff !important; display: block; text-align: left; margin-bottom: 2px;">${event.title}</span>
+        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left;">${displayTime}</span>
       </div>
     `
   };
