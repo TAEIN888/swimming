@@ -72,6 +72,15 @@ body {
   justify-content: space-between;
   z-index: 10;
   box-shadow: 4px 0 20px rgba(15, 23, 42, 0.02);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-right-width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-right-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .brand-section {

@@ -864,9 +864,13 @@ function updateDashboardStats(events) {
   const actualMemberCalendars = allCalendars.filter(c => (c.summary || '').startsWith('**헤엄하다_'));
   
   // UI 요소 반영
-  document.getElementById('stat-today-classes').textContent = `${todayClasses.length} 건`;
-  document.getElementById('stat-weekly-classes').textContent = `${weeklyClasses.length} 건`;
-  document.getElementById('stat-member-count').textContent = `${actualMemberCalendars.length} 개`;
+  const statTodayEl = document.getElementById('stat-today-classes');
+  const statWeeklyEl = document.getElementById('stat-weekly-classes');
+  const statMemberEl = document.getElementById('stat-member-count');
+  
+  if (statTodayEl) statTodayEl.textContent = `${todayClasses.length} 건`;
+  if (statWeeklyEl) statWeeklyEl.textContent = `${weeklyClasses.length} 건`;
+  if (statMemberEl) statMemberEl.textContent = `${actualMemberCalendars.length} 개`;
 
   // 강사별 현황 뷰 갱신
   renderCoachStatusView(filteredEvents);
@@ -1155,9 +1159,9 @@ function renderEventContent(arg) {
       
       const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="background: ${color} !important; border: none !important; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 6px; border-radius: 4px !important; width: 100%;">
-          <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; word-break: break-all; color: #ffffff !important; display: block; text-align: left;">${sub.title}</span>
-          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left;">${timeRange}</span>
+        <div class="merged-event-item" data-idx="${idx}" style="background: ${color} !important; border: none !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 3px 5px !important; border-radius: 4px !important; width: 100%; box-sizing: border-box; overflow: hidden;" title="${sub.title} (${timeRange})">
+          <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; color: #ffffff !important; display: block; text-align: left; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;">${sub.title}</span>
+          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left; display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${timeRange}</span>
         </div>
       `;
     });
@@ -1173,9 +1177,9 @@ function renderEventContent(arg) {
   const displayTime = arg.timeText ? arg.timeText.replace(' - ', '-') : '';
   return {
     html: `
-      <div class="single-event-container" style="background: ${color} !important; border: none !important; border-radius: 4px !important; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 6px; height: 100%;">
-        <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; word-break: break-all; color: #ffffff !important; display: block; text-align: left; margin-bottom: 2px;">${event.title}</span>
-        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left;">${displayTime}</span>
+      <div class="single-event-container" style="background: ${color} !important; border: none !important; border-radius: 4px !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 3px 5px !important; height: 100%; box-sizing: border-box; overflow: hidden;" title="${event.title} (${displayTime})">
+        <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; color: #ffffff !important; display: block; text-align: left; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;">${event.title}</span>
+        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left; display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayTime}</span>
       </div>
     `
   };
@@ -1707,6 +1711,20 @@ function setupEventListeners() {
       }
     });
   });
+
+  // 데스크톱 사이드바 접기/펴기 토글 리스너
+  const btnSidebarDesktopToggle = document.getElementById('btn-sidebar-desktop-toggle');
+  if (btnSidebarDesktopToggle && appSidebar) {
+    btnSidebarDesktopToggle.addEventListener('click', () => {
+      appSidebar.classList.toggle('collapsed');
+      // 사이드바 트랜지션 완료 후에 FullCalendar 크기 동적으로 조율
+      setTimeout(() => {
+        if (calendar) {
+          calendar.updateSize();
+        }
+      }, 310);
+    });
+  }
 }
 
 // 14. 강사별 재등록율 데이터 로드 및 계산
