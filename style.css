@@ -1863,5 +1863,9 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
   opacity: 1;
 }
 
-
-
+/* Sidebar bottom separator and spacing */
+.sidebar-bottom {
+  margin-top: auto; /* Push to bottom if space is available */
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
