@@ -388,7 +388,7 @@ async function fetchCalendarList() {
       const item = document.createElement('label');
       item.className = `calendar-checkbox-item ${isInstructorCal ? 'is-instructor' : 'is-other'}`;
       
-      const color = cal.backgroundColor || '#3b82f6';
+      const color = resolveCalendarColor(cal);
       
       // 내 캘린더는 기본 선택(checked), 다른 캘린더는 선택 해제(unchecked)
       const isChecked = isMyCal;
@@ -605,7 +605,7 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
     const fetchPromises = targetIds.map(async (calendarId) => {
       // 캘린더 고유 컬러 찾기
       const calMeta = allCalendars.find(c => c.id === calendarId);
-      const calColor = calMeta ? calMeta.backgroundColor : '#3b82f6';
+      const calColor = resolveCalendarColor(calMeta);
       
       const cacheKey = `${calendarId}_${fetchInfo.startStr}_${fetchInfo.endStr}`;
       if (googleEventsCache.has(cacheKey)) {
@@ -1153,6 +1153,43 @@ function parseRgb(color) {
 function isYellowish(color) {
   const { r, g, b } = parseRgb(color);
   return r > 200 && g > 170 && b < 120;
+}
+
+// 구글 캘린더 24가지 공식 달력 고유 컬러 매핑 테이블
+const googleCalendarColors = {
+  '1': '#ac725e',  // 코코아
+  '2': '#d06b64',  // 홍당무
+  '3': '#f83a22',  // 빨강 (Cherry)
+  '4': '#fa573c',  // 다크 귤
+  '5': '#ff7537',  // 다크 오렌지
+  '6': '#ffad46',  // 오렌지
+  '7': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
+  '8': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
+  '9': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
+  '10': '#9fe1e7', // 민트/그린
+  '11': '#b3dc6c', // 연그린
+  '12': '#80d65a', // 그린
+  '13': '#5cbb46', // 진그린
+  '14': '#257e4a', // 포레스트 그린
+  '15': '#29bc9f', // 아쿠아 마린
+  '16': '#7ae7bf', // 터코이즈 (Teal)
+  '17': '#4d8bf5', // 블루베리 (Blue)
+  '18': '#3051bc', // 다크 블루
+  '19': '#8676db', // 라벤더 (Lavender)
+  '20': '#9881db', // 퍼플
+  '21': '#9263af', // 딥 퍼플
+  '22': '#b99aff', // 연보라
+  '23': '#ff97e2', // 핑크
+  '24': '#e03c8c'  // 딥 핑크
+};
+
+// 캘린더의 구글 표준 색상을 해상도 높게 분석해 리턴하는 함수
+function resolveCalendarColor(cal) {
+  if (!cal) return '#54b4e9';
+  if (cal.colorId && googleCalendarColors[cal.colorId]) {
+    return googleCalendarColors[cal.colorId];
+  }
+  return cal.backgroundColor || '#54b4e9';
 }
 
 // 8-2. FullCalendar 커스텀 일정 렌더링 함수
