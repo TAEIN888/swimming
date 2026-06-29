@@ -3428,7 +3428,6 @@ function showDeletedEventsPopup(dateStr) {
       };
       
       const timeRange = `${getTime(item.originalStart)} ~ ${getTime(item.originalEnd)}`;
-      const deleteTime = item.deletedAt.substring(5, 16); // MM-DD HH:mm 형태로 축약
       
       const card = document.createElement('div');
       card.className = 'deleted-event-card';
@@ -3436,13 +3435,14 @@ function showDeletedEventsPopup(dateStr) {
       card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; margin-bottom: 4px;">
           <span style="font-weight: 700; color: var(--text-main); font-size: 0.88rem;">${item.eventTitle}</span>
-          <span style="font-size: 0.72rem; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 20px; font-weight: 600;">🗑️ 삭제: ${deleteTime}</span>
+          <span style="font-size: 0.72rem; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 20px; font-weight: 600;">🗑️ 삭제됨</span>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; color: var(--text-muted);">
           <div><strong style="color: var(--text-main);">시간:</strong> ${timeRange}</div>
           <div><strong style="color: var(--text-main);">강사:</strong> ${item.coachName || '미지정'}</div>
           <div><strong style="color: var(--text-main);">회원:</strong> ${item.memberName || '미지정'}</div>
           <div style="grid-column: span 2; font-size: 0.75rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><strong style="color: var(--text-main);">캘린더:</strong> ${item.calendarName}</div>
+          <div style="grid-column: span 2; font-size: 0.78rem; border-top: 1px dashed #e2e8f0; padding-top: 4px; margin-top: 2px; color: #ef4444;"><strong style="color: var(--text-main);">삭제 일시:</strong> ${item.deletedAt}</div>
         </div>
       `;
       container.appendChild(card);
