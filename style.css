@@ -142,31 +142,29 @@ body {
   padding-left: 0.5rem;
 }
 
-/* User Profile Section */
+/* User Profile Section (간소화 처리) */
 .profile-card {
-  background: #f8fafc;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 6px;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 2rem;
-  transition: var(--transition);
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
 }
 
 .profile-card:hover {
-  background: #f1f5f9;
-  border-color: rgba(15, 23, 42, 0.15);
+  background: transparent;
 }
 
 .profile-avatar {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.12);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
 }
 
 .profile-info {
@@ -176,7 +174,7 @@ body {
 
 .profile-name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
@@ -184,11 +182,28 @@ body {
 }
 
 .profile-email {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Sidebar action quick buttons (+ button) */
+.sidebar-action-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+}
+
+.sidebar-action-btn:hover {
+  color: var(--color-primary);
+  background-color: rgba(99, 102, 241, 0.08);
+  transform: scale(1.1);
 }
 
 /* Main Content Area */
@@ -500,7 +515,7 @@ body {
 /* FullCalendar Styling Customizations (Premium Light Theme) */
 #calendar-container {
   flex: 1;
-  min-height: 550px;
+  min-height: 820px;
 }
 
 .fc {
