@@ -7,6 +7,16 @@ export const secrets = {
 };
 
 export async function loadSecrets() {
+  // 로컬 개발 환경(localhost, 127.0.0.1 등)에서만 secrets.json 로드를 시도하여 운영 서버 콘솔에 404 빨간 에러가 표시되는 것을 방지합니다.
+  const isLocal = window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' || 
+                  window.location.hostname.startsWith('192.168.');
+                  
+  if (!isLocal) {
+    console.log('운영 환경(GitHub Pages)이므로 secrets.json 로드를 건너뛰고 브라우저 설정(localStorage)을 사용합니다.');
+    return;
+  }
+
   try {
     const response = await fetch('./secrets.json');
     if (response.ok) {
