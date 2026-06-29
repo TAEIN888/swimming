@@ -2622,12 +2622,71 @@ if (btnMemberRefresh) {
 // =========================================================================
 
 const DEFAULT_TEMPLATES = {
-  'template-a': "안녕하세요, 수영장 헤엄하다입니다.\n예약 일정 안내드립니다.\n* {월}/{일}({요일}) {시간}시 ({회차})\n* 수업시작 15분 전까지 센터에 도착해주시기를 부탁드립니다.\n이전 타임 고객님이 {시간-1}시 50분 수업 종료 직후 샤워실을 사용하기에 그 전에 수영복으로 환복을 완료하셔야 수업시작 전에 수영장에 미리 들어가 계실 수 있습니다.\n* 수영장 앞에 주차하실 때는 앞에서부터 주차를 부탁드리고, 앞에 차가 있을 경우 가능한 앞차와 가깝게 주차해 주시기를 부탁드립니다.\n* 수업 취소 및 변경은, 수업 시각 기준으로 이틀 전까지 부탁드립니다. 그 이후에 취소 및 변경하실 경우 횟수를 차감하고 있으니 취소 및 변경은 미리 말씀 부탁드립니다. 소규모 예약제로 운영되는 시스템상 취소 발생 시 다른 수업으로 대체하기가 어려워 양해 부탁드립니다.",
-  'template-b': "안녕하세요, 수영장 헤엄하다입니다.\n{이름}님, 내일 {시간}시 수업 안내입니다.\n준비물(수영복, 수모, 물안경)을 꼭 지참해 주세요. 🏊",
-  'template-c': "[헤엄하다] 내일 강습 알림\n대상: {이름}님 ({시간}시 수업)"
+  'template-a': "안녕하세요, 수영장 헤엄하다입니다.\n예약 일정 안내드립니다.\n* {월}/{일}({요일}) {시간}시 ({회차})\n* 수업시작 15분 전까지 센터에 도착해주시기를 부탁드립니다.\n이전 타임 고객님이 {시간-1}시 50분 수업 종료 직후 샤워실을 사용하기에 그 전에 수영복으로 환복을 완료하셔야 수업시작 전에 수영장에 미리 들어가 계실 수 있습니다.\n* 수영장 앞에 주차하실 때는 앞에서부터 주차를 부탁드리고, 앞에 차가 있을 경우 가능한 앞차와 가깝게 주차해 주시기를 부탁드립니다.\n* 수업 취소 및 변경은, 수업 시각 기준으로 이틀 전까지 부탁드립니다. 그 이후에 취소 및 변경하실 경우 횟수를 차감하고 있으니 취소 및 변경은 미리 말씀 부탁드립니다. 소규모 예약제로 운영되는 시스템상 취소 발생 시 다른 수업으로 대체하기가 어려워 양해 부탁드립니다."
 };
 
+// 특정 회원의 가장 최근 과거 일정을 조회하여 회차 정보 + 1 계산
+async function getNextSessionInfo(calendarId, memberName, targetDateStr) {
+  try {
+    const targetDate = new Date(targetDateStr);
+    targetDate.setHours(0, 0, 0, 0); // 대상 날짜 자정 기준 이전 일정만
+    
+    // 이 회원 이름의 텍스트가 특수문자를 포함할 수 있으므로, 이름 부문만 한글/영문 추출
+    const cleanNameMatch = memberName.match(/^([가-힣a-zA-Z0-9]+)/);
+    const searchName = cleanNameMatch ? cleanNameMatch[1] : memberName;
+    
+    const response = await gapi.client.calendar.events.list({
+      calendarId: calendarId,
+      timeMax: targetDate.toISOString(),
+      q: searchName,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100 // 최근 100개 일정 조회
+    });
+    
+    const items = response.result.items || [];
+    
+    // 시작 시간 기준 역순 정렬 (최신 순)
+    const sortedItems = items
+      .filter(evt => {
+        const summary = evt.summary || '';
+        return summary.includes(searchName);
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.start.dateTime || a.start.date).getTime();
+        const bTime = new Date(b.start.dateTime || b.start.date).getTime();
+        return bTime - aTime;
+      });
+      
+    // 가장 최근 일정에서 회차 정보 매칭 및 + 1 계산
+    for (const evt of sortedItems) {
+      const summary = evt.summary || '';
+      
+      // X/Y회차 형식 매칭 (예: 5/10회차)
+      const slashMatch = summary.match(/(\d+)\/(\d+)\s*회차/);
+      if (slashMatch) {
+        const current = parseInt(slashMatch[1], 10);
+        const total = parseInt(slashMatch[2], 10);
+        return `${current + 1}/${total}회차`;
+      }
+      
+      // X회차 또는 X회 형식 매칭 (예: 5회차, 5회)
+      const simpleMatch = summary.match(/(\d+)\s*(회차|회)/);
+      if (simpleMatch) {
+        const current = parseInt(simpleMatch[1], 10);
+        return `${current + 1}회차`;
+      }
+    }
+    
+    return '';
+  } catch (err) {
+    console.warn(`[getNextSessionInfo] 이전 회차 정보 계산 실패 (${memberName}):`, err);
+    return '';
+  }
+}
+
 let notifierEvents = []; // 알림 생성 대상이 되는 내일의 일정 정보 목록
+let lastSheetLoadFailed = false; // 스프레드시트 회원목록 로드 실패 캐싱
 
 // 1. 알림 모달 열기 및 초기 설정
 function openNotifierModal() {
@@ -2721,10 +2780,14 @@ async function generateNotifications() {
               status: row[8] || ''
             };
           }).filter(m => m.id !== '');
+          lastSheetLoadFailed = false; // 성공 시 플래그 초기화
         }
       } catch (sheetErr) {
         console.warn('알림 생성용 회원 목록 로드 중 에러 무시:', sheetErr);
+        lastSheetLoadFailed = true; // 실패 시 플래그 설정
       }
+    } else {
+      lastSheetLoadFailed = false; // 이미 캐싱된 데이터가 있으면 에러 없음
     }
     
     // 각 활성 캘린더별 일정을 병렬로 가져옵니다.
@@ -2745,7 +2808,8 @@ async function generateNotifications() {
       return items.map(evt => {
         return {
           event: evt,
-          coachName: coachName
+          coachName: coachName,
+          calendarId: calendarId
         };
       });
     });
@@ -2753,11 +2817,8 @@ async function generateNotifications() {
     const results = await Promise.all(promises);
     const flatEvents = results.flat();
     
-    notifierEvents = [];
-    
-    flatEvents.forEach(item => {
+    const eventPromises = flatEvents.map(async (item) => {
       const evt = item.event;
-      // 강사별 일정 필터
       let memberName = '';
       const summary = evt.summary || '';
       
@@ -2769,11 +2830,31 @@ async function generateNotifications() {
         memberName = summary.trim();
       }
       
-      // 회차 파싱 시도 (예: [3회차] 홍길동 또는 홍길동 3회차 또는 3회)
+      // 하이픈(-) 이후 회차 정보 등 제거하여 순수 회원명 추출 (예: 이서호(남,8) - 5/10회차 => 이서호(남,8))
+      if (memberName.includes('-')) {
+        memberName = memberName.split('-')[0].trim();
+      }
+      
+      // 1. 내일 일정 자체에서 회차 정보 파싱 시도 (X/Y회차 or X회차/X회)
       let sessionInfo = '';
-      const sessionMatch = summary.match(/(\d+회차|\d+회)/);
-      if (sessionMatch) {
-        sessionInfo = sessionMatch[1];
+      const slashMatch = summary.match(/(\d+\/\d+\s*회차)/);
+      if (slashMatch) {
+        sessionInfo = slashMatch[1];
+      } else {
+        const simpleMatch = summary.match(/(\d+회차|\d+회)/);
+        if (simpleMatch) {
+          sessionInfo = simpleMatch[1];
+        }
+      }
+      
+      // 2. 내일 일정 자체에 회차 정보가 없거나, '회차' 형식이 맞지 않다면, 최근 과거 일정 + 1 계산
+      if (!sessionInfo) {
+        sessionInfo = await getNextSessionInfo(item.calendarId, memberName, targetDateStr);
+      }
+      
+      // 3. 그래도 최종 정보가 없으면 기본값
+      if (!sessionInfo) {
+        sessionInfo = '회차 정보 없음';
       }
       
       // 시작 시간 구하기
@@ -2782,11 +2863,11 @@ async function generateNotifications() {
       const pad = (n) => String(n).padStart(2, '0');
       const timeStr = `${pad(startTimeObj.getHours())}:${pad(startTimeObj.getMinutes())}`;
       
-      // 회원 연락처 매핑
+      // 회원 연락처 매핑 (순수 회원명 기준)
       const matchedMember = cachedMembers.find(m => m.name === memberName);
       const phoneNum = matchedMember ? matchedMember.phone : '연락처 미등록';
       
-      notifierEvents.push({
+      return {
         id: evt.id,
         name: memberName,
         phone: phoneNum,
@@ -2794,8 +2875,10 @@ async function generateNotifications() {
         date: targetDateStr,
         session: sessionInfo,
         coach: item.coachName
-      });
+      };
     });
+    
+    notifierEvents = await Promise.all(eventPromises);
     
     // 시간 순 정렬
     notifierEvents.sort((a, b) => a.time.localeCompare(b.time));
@@ -2813,6 +2896,22 @@ function renderNotifierMessages() {
   if (!notifierLoading || !notifierEmptyMsg || !notifierResultsContainer || !notifierListCount || !notifierTemplateText) return;
   
   notifierResultsContainer.innerHTML = '';
+  
+  // 구글 시트 로드 실패 시 경고 배너 띄우기
+  if (lastSheetLoadFailed) {
+    const warnBanner = document.createElement('div');
+    warnBanner.style.cssText = 'background-color: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: var(--radius-md); font-size: 0.78rem; line-height: 1.4; display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; grid-column: 1 / -1;';
+    warnBanner.innerHTML = `
+      <i class="fa-solid fa-triangle-exclamation" style="margin-top: 2px; color: #ef4444;"></i>
+      <div>
+        <strong style="font-weight: 700;">구글 시트 회원목록 로드 실패 (403 권한 에러):</strong><br>
+        현재 로그인된 구글 계정이 설정된 스프레드시트에 대한 접근 권한이 없습니다.<br>
+        구글 시트 우측 상단의 <strong>[공유]</strong> 버튼을 눌러 <strong>process0823@gmail.com</strong> 계정에 뷰어 또는 편집자 권한을 추가해 주세요.<br>
+        <span style="color: #6b7280; font-size: 0.72rem;">(권한을 추가하기 전까지는 연락처가 '연락처 미등록'으로 표시됩니다.)</span>
+      </div>
+    `;
+    notifierResultsContainer.appendChild(warnBanner);
+  }
   
   if (notifierEvents.length === 0) {
     notifierLoading.style.display = 'none';
