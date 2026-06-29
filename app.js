@@ -655,12 +655,28 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
           // 개별 이벤트 커스텀 색상(colorId)이 설정되어 있으면 적용하고, 없으면 캘린더 자체 대표색 사용
           let eventColor = calColor;
           if (gEvent.colorId) {
-            if (gEvent.colorId === '7') eventColor = '#56b4b4'; // 1번 레인
-            else if (gEvent.colorId === '4') eventColor = '#9b8ae6'; // 3번 레인
-            else if (gEvent.colorId === '11') eventColor = '#df6084'; // 4번 레인
-            else if (gEvent.colorId === '5') eventColor = '#e1973a'; // 개인 교습
-            else if (gEvent.colorId === '9') eventColor = '#6b8ed6'; // 2번 레인 (Blueberry)
+            // 구글 캘린더 11개 색상의 소프트 파스텔 톤 매핑
+            const googlePastelColors = {
+              '1': '#a4bdfc',  // 라벤더 (Lavender)
+              '2': '#7ae7bf',  // 세이지 (Sage/Green)
+              '3': '#dbadff',  // 포도 (Grape/Purple)
+              '4': '#ff887c',  // 플라밍고 (Flamingo/Pink)
+              '5': '#a4bdfc',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
+              '6': '#ffb878',  // 귤 (Mandarin/Orange)
+              '7': '#46d6db',  // 피콕 (Peacock/Cyan)
+              '8': '#e1e1e1',  // 흑연 (Graphite/Gray)
+              '9': '#54b4e9',  // 블루베리 (Blueberry/Blue)
+              '10': '#7ae7bf', // 바질 (Basil) -> 세이지로 매핑
+              '11': '#ff7663'  // 토마토 (Tomato/Red)
+            };
+            eventColor = googlePastelColors[gEvent.colorId] || eventColor;
           }
+          
+          // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
+          if (isYellowish(eventColor)) {
+            eventColor = '#54b4e9'; // 소프트 블루로 대체
+          }
+          
           // 취소 일정 회색 표시 강제화
           if (gEvent.summary && gEvent.summary.startsWith('*헤엄하다_취소')) {
             eventColor = '#a0aec0'; // 소프트 회색
@@ -780,14 +796,30 @@ async function fetchAndRefreshDashboardStats(forceRefresh = false) {
             }
           }
           
-          let eventColor = cal.backgroundColor || '#6b8ed6';
+          let eventColor = cal.backgroundColor || '#54b4e9';
           if (gEvent.colorId) {
-            if (gEvent.colorId === '7') eventColor = '#56b4b4';
-            else if (gEvent.colorId === '4') eventColor = '#9b8ae6';
-            else if (gEvent.colorId === '11') eventColor = '#df6084';
-            else if (gEvent.colorId === '5') eventColor = '#e1973a';
-            else if (gEvent.colorId === '9') eventColor = '#6b8ed6';
+            // 구글 캘린더 11개 색상의 소프트 파스텔 톤 매핑
+            const googlePastelColors = {
+              '1': '#a4bdfc',  // 라벤더 (Lavender)
+              '2': '#7ae7bf',  // 세이지 (Sage/Green)
+              '3': '#dbadff',  // 포도 (Grape/Purple)
+              '4': '#ff887c',  // 플라밍고 (Flamingo/Pink)
+              '5': '#a4bdfc',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
+              '6': '#ffb878',  // 귤 (Mandarin/Orange)
+              '7': '#46d6db',  // 피콕 (Peacock/Cyan)
+              '8': '#e1e1e1',  // 흑연 (Graphite/Gray)
+              '9': '#54b4e9',  // 블루베리 (Blueberry/Blue)
+              '10': '#7ae7bf', // 바질 (Basil) -> 세이지로 매핑
+              '11': '#ff7663'  // 토마토 (Tomato/Red)
+            };
+            eventColor = googlePastelColors[gEvent.colorId] || eventColor;
           }
+          
+          // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
+          if (isYellowish(eventColor)) {
+            eventColor = '#54b4e9'; // 소프트 블루로 대체
+          }
+          
           // 취소 일정 회색 표시 강제화
           if (gEvent.summary && gEvent.summary.startsWith('*헤엄하다_취소')) {
             eventColor = '#a0aec0';
@@ -1115,6 +1147,12 @@ function parseRgb(color) {
     }
   }
   return { r, g, b };
+}
+
+// 노란색 계열 색상 판별 함수 (R > 200, G > 170, B < 120)
+function isYellowish(color) {
+  const { r, g, b } = parseRgb(color);
+  return r > 200 && g > 170 && b < 120;
 }
 
 // 8-2. FullCalendar 커스텀 일정 렌더링 함수

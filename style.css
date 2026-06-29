@@ -626,6 +626,25 @@ body {
   padding: 4px 6px !important;
 }
 
+/* 마우스 호버 시 좁은 일정이 가로로 확장되며 맨 앞으로 올라와 읽기 편하게 하는 효과 */
+.fc-timegrid-event-harness:hover {
+  z-index: 50 !important;
+}
+.fc-timegrid-event-harness:hover .fc-timegrid-event {
+  width: max-content !important;
+  min-width: 100% !important;
+  max-width: 280px !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 6px 6px rgba(0, 0, 0, 0.1) !important;
+}
+.fc-timegrid-event-harness:hover .single-event-title,
+.fc-timegrid-event-harness:hover .single-event-time,
+.fc-timegrid-event-harness:hover .merged-event-title,
+.fc-timegrid-event-harness:hover .merged-event-time {
+  white-space: normal !important; /* 호버 시에는 텍스트 자동 줄바꿈으로 전체 보기 */
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
 /* 월간 뷰 등 다른 뷰의 이벤트 텍스트 스타일 방어 (흰색 배경에 글씨가 안보이는 현상 방지) */
 .fc-daygrid-event {
   background: transparent !important;
