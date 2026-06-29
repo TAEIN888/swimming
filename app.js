@@ -1097,6 +1097,33 @@ function showEventEditModal(eventData) {
   openModal(eventBackdrop);
 }
 
+// 색상 문자열에서 R, G, B 숫자 추출하는 헬퍼
+function parseRgb(color) {
+  let r = 99, g = 102, b = 241;
+  if (!color) return { r, g, b };
+  
+  if (color.startsWith('#')) {
+    const hex = color.replace('#', '');
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    }
+  } else if (color.startsWith('rgb')) {
+    const rgbVals = color.match(/\d+/g);
+    if (rgbVals && rgbVals.length >= 3) {
+      r = parseInt(rgbVals[0], 10);
+      g = parseInt(rgbVals[1], 10);
+      b = parseInt(rgbVals[2], 10);
+    }
+  }
+  return { r, g, b };
+}
+
 // 8-2. FullCalendar 커스텀 일정 렌더링 함수
 function renderEventContent(arg) {
   const event = arg.event;
@@ -1105,33 +1132,12 @@ function renderEventContent(arg) {
   if (!isTimeGrid) {
     // 월별 뷰(dayGridMonth) 등에서는 콤팩트하고 이쁜 카드 형태로 렌더링
     const color = event.extendedProps.colorVal || '#6366f1';
-    
-    // 색상의 RGB 값을 파싱하여 파스텔톤 투명 배경 및 테두리 구현
-    let r = 99, g = 102, b = 241;
-    if (color.startsWith('#')) {
-      const hex = color.replace('#', '');
-      if (hex.length === 3) {
-        r = parseInt(hex[0] + hex[0], 16);
-        g = parseInt(hex[1] + hex[1], 16);
-        b = parseInt(hex[2] + hex[2], 16);
-      } else if (hex.length === 6) {
-        r = parseInt(hex.substring(0, 2), 16);
-        g = parseInt(hex.substring(2, 4), 16);
-        b = parseInt(hex.substring(4, 6), 16);
-      }
-    } else if (color.startsWith('rgb')) {
-      const rgbVals = color.match(/\d+/g);
-      if (rgbVals && rgbVals.length >= 3) {
-        r = parseInt(rgbVals[0], 10);
-        g = parseInt(rgbVals[1], 10);
-        b = parseInt(rgbVals[2], 10);
-      }
-    }
+    const { r, g, b } = parseRgb(color);
     
     return {
       html: `
-        <div class="month-event-item" style="border: 1.5px solid ${color}; border-left: 4px solid ${color}; background-color: rgba(${r}, ${g}, ${b}, 0.08);">
-          ${arg.timeText ? `<span class="month-event-time" style="color: ${color}; font-weight: 700;">${arg.timeText}</span>` : ''}
+        <div class="month-event-item" style="border: 1.5px solid ${color} !important; border-left: 4px solid ${color} !important; background-color: rgba(${r}, ${g}, ${b}, 0.08) !important;">
+          ${arg.timeText ? `<span class="month-event-time" style="color: ${color} !important; font-weight: 700;">${arg.timeText}</span>` : ''}
           <span class="month-event-title" style="color: #1e293b; font-weight: 600;" title="${event.title}">${event.title}</span>
         </div>
       `
@@ -1145,6 +1151,7 @@ function renderEventContent(arg) {
     `;
     event.extendedProps.subEvents.forEach((sub, idx) => {
       const color = sub.extendedProps.colorVal || '#6366f1';
+      const { r, g, b } = parseRgb(color);
       
       // 병합된 내부 일정의 경우, FullCalendar가 subEvent 별로 timeText를 따로 주지 않으므로 직접 계산
       const formatSubTime = (startVal, endVal) => {
@@ -1160,9 +1167,9 @@ function renderEventContent(arg) {
       
       const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 1px 4px;">
-          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 600; color: var(--text-muted); line-height: 1.0;">${timeRange}</span>
-          <span class="merged-event-title" style="font-weight: 500; font-size: 0.7rem; line-height: 1.1; word-break: break-all;">${sub.title}</span>
+        <div class="merged-event-item" data-idx="${idx}" style="border: 1px solid rgba(${r}, ${g}, ${b}, 0.25) !important; border-left: 4px solid ${color} !important; background: rgba(${r}, ${g}, ${b}, 0.08) !important; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; border-radius: 4px; width: 100%;">
+          <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 700; color: ${color} !important; line-height: 1.0;">${timeRange}</span>
+          <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.1; word-break: break-all; color: #1e293b;">${sub.title}</span>
         </div>
       `;
     });
@@ -1174,13 +1181,14 @@ function renderEventContent(arg) {
   }
   
   const color = event.extendedProps.colorVal || '#6366f1';
+  const { r, g, b } = parseRgb(color);
   // FullCalendar가 로컬 타임존 및 설정(eventTimeFormat)에 맞게 파싱한 공식 timeText를 사용합니다.
   const displayTime = arg.timeText ? arg.timeText.replace(' - ', ' ~ ') : '';
   return {
     html: `
-      <div class="single-event-container" style="border-left: 3px solid ${color}; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 1px 4px; height: 100%;">
-        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 600; color: var(--text-muted); line-height: 1.0;">${displayTime}</span>
-        <span class="single-event-title" style="font-weight: 500; font-size: 0.7rem; line-height: 1.1; word-break: break-all;">${event.title}</span>
+      <div class="single-event-container" style="border: 1px solid rgba(${r}, ${g}, ${b}, 0.25) !important; border-left: 4px solid ${color} !important; background: rgba(${r}, ${g}, ${b}, 0.08) !important; display: flex; flex-direction: column; align-items: flex-start; gap: 0px; padding: 2px 4px; height: 100%;">
+        <span class="single-event-time" style="font-size: 0.62rem; font-weight: 700; color: ${color} !important; line-height: 1.0;">${displayTime}</span>
+        <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.1; word-break: break-all; color: #1e293b;">${event.title}</span>
       </div>
     `
   };
