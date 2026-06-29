@@ -14,6 +14,7 @@ let selectedCalendarIds = new Set();
 let lastViewType = null;
 const googleEventsCache = new Map();
 let dashboardEventsCache = null;
+let deletedEventsCache = []; // 삭제된 일정 보관용 전역 캐시
 
 // 캘린더 새로고침 및 캐시 초기화 헬퍼 함수
 function refetchCalendarEvents(clearCache = false) {
@@ -173,6 +174,9 @@ async function attemptSessionRestore() {
           console.log('캘린더 목록 로드 시도...');
           await fetchCalendarList();
           
+          console.log('삭제된 일정 목록 로드 시도...');
+          await fetchDeletedEvents();
+          
           console.log('달력 인스턴스 초기화 시도...');
           initCalendar();
           
@@ -306,6 +310,9 @@ async function handleAuthCallback(tokenResponse) {
     
     // 다중 캘린더 목록 조회 및 필터 구성
     await fetchCalendarList();
+    
+    // 삭제된 일정 목록 로드
+    await fetchDeletedEvents();
     
     initCalendar();
     
@@ -585,6 +592,39 @@ function initCalendar() {
       info.el.style.backgroundColor = 'transparent';
       info.el.style.border = 'none';
       info.el.style.boxShadow = 'none';
+    },
+    dayCellDidMount: function(info) {
+      if (info.view.type !== 'dayGridMonth') return; // 월간 뷰에서만 일자별 배지 표시
+      
+      const date = info.date;
+      // 로컬 시간 기준 YYYY-MM-DD 형식으로 포맷팅
+      const pad = (num) => String(num).padStart(2, '0');
+      const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      
+      // 해당 날짜의 원래 시작일정이 삭제된 내역 필터링
+      const deletedCount = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr)).length;
+      
+      if (deletedCount > 0) {
+        // 이미 생성된 배지가 있다면 중복 추가 방지
+        const existingBadge = info.el.querySelector('.deleted-event-badge');
+        if (existingBadge) existingBadge.remove();
+        
+        const badge = document.createElement('div');
+        badge.className = 'deleted-event-badge';
+        badge.innerHTML = `<i class="fa-solid fa-trash-can"></i> ${deletedCount}건`;
+        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 2px 5px; margin-top: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-weight: bold; width: fit-content; z-index: 5;';
+        
+        badge.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation(); // 새 일정 만들기 레이어 방어
+          showDeletedEventsPopup(dateStr);
+        });
+        
+        const frame = info.el.querySelector('.fc-daygrid-day-frame');
+        if (frame) {
+          frame.appendChild(badge);
+        }
+      }
     },
     loading: function(isLoading) {
       const spinner = document.getElementById('loading-spinner');
@@ -1398,13 +1438,47 @@ btnDeleteEvent.addEventListener('click', async () => {
   
   if (confirm('이 일정(수업)을 삭제하시겠습니까?')) {
     try {
+      // 삭제 기록 저장을 위한 정보 취합
+      const calMeta = allCalendars.find(c => c.id === calendarId);
+      const calendarName = calMeta ? calMeta.summary : '기본 캘린더';
+      const coachName = calMeta && calMeta.summary.startsWith('**헤엄하다_') 
+        ? calMeta.summary.replace('**헤엄하다_', '') 
+        : '';
+        
+      const deletedAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+      const eventTitle = inpEventTitle.value;
+      const originalStart = `${inpEventStartDate.value} ${inpEventStartTime.value}`;
+      const originalEnd = `${inpEventEndDate.value} ${inpEventEndTime.value}`;
+      const memberName = inpEventMemberName.value;
+
+      // 1. 스프레드시트에 삭제 내역 저장 요청
+      await logDeletedEventToSpreadsheet({
+        deletedAt,
+        calendarId,
+        calendarName,
+        eventId: id,
+        eventTitle,
+        originalStart,
+        originalEnd,
+        memberName,
+        coachName
+      });
+
+      // 2. 구글 캘린더에서 일정 삭제
       await gapi.client.calendar.events.delete({
         calendarId: calendarId,
         eventId: id
       });
       console.log('Event deleted');
+      
       closeModal(eventBackdrop);
       refetchCalendarEvents(true);
+      
+      // 3. 삭제 캐시 목록 다시 로드하여 즉시 배지 반영
+      await fetchDeletedEvents();
+      if (calendar) {
+        calendar.refetchEvents(); // 달력 다시 렌더링 강제
+      }
     } catch (err) {
       console.error('Error deleting event:', err);
       alert('일정을 삭제하는 데 실패했습니다.');
@@ -3104,6 +3178,187 @@ function showToastNotification(message) {
   setTimeout(() => {
     toast.classList.remove('show');
   }, 2500);
+}
+
+// ==========================================
+// 📅 삭제된 일정 구글 스프레드시트 로깅 및 팝업 연동 기능
+// ==========================================
+
+// 1. 스프레드시트로부터 삭제된 일정 로드
+async function fetchDeletedEvents() {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) {
+    console.warn('스프레드시트 ID가 비어있어 삭제된 일정을 가져올 수 없습니다.');
+    return [];
+  }
+  
+  try {
+    const response = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId,
+      range: 'A2:I' // 헤더 제외 A열부터 I열까지 데이터 가져오기
+    });
+    
+    const rows = response.result.values || [];
+    deletedEventsCache = rows.map(row => ({
+      deletedAt: row[0] || '',
+      calendarId: row[1] || '',
+      calendarName: row[2] || '',
+      eventId: row[3] || '',
+      eventTitle: row[4] || '',
+      originalStart: row[5] || '',
+      originalEnd: row[6] || '',
+      memberName: row[7] || '',
+      coachName: row[8] || ''
+    }));
+    
+    console.log('스프레드시트로부터 로드된 삭제 일정 개수:', deletedEventsCache.length);
+    return deletedEventsCache;
+  } catch (err) {
+    console.warn('삭제 목록 로드 실패 (시트가 비어있거나 없음). 헤더 초기화를 시도합니다:', err);
+    try {
+      await initializeSpreadsheetHeaders(spreadsheetId);
+    } catch (headerErr) {
+      console.error('스프레드시트 헤더 자동 초기화 실패:', headerErr);
+    }
+    deletedEventsCache = [];
+    return [];
+  }
+}
+
+// 2. 스프레드시트 초기 헤더 생성 헬퍼
+async function initializeSpreadsheetHeaders(spreadsheetId) {
+  const headers = [[
+    '삭제 일시',
+    '캘린더 ID',
+    '캘린더명',
+    '일정 ID',
+    '일정명',
+    '원래 수업 시작',
+    '원래 수업 종료',
+    '회원명',
+    '강사명'
+  ]];
+  
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId,
+    range: 'A1:I1',
+    valueInputOption: 'USER_ENTERED',
+    resource: { values: headers }
+  });
+  console.log('스프레드시트 헤더(A1:I1)가 성공적으로 초기화되었습니다.');
+}
+
+// 3. 일정을 실제 지우기 전 스프레드시트에 내역 누적 기록
+async function logDeletedEventToSpreadsheet({
+  deletedAt,
+  calendarId,
+  calendarName,
+  eventId,
+  eventTitle,
+  originalStart,
+  originalEnd,
+  memberName,
+  coachName
+}) {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) {
+    console.warn('스프레드시트 ID가 없어 로그 저장을 생략합니다.');
+    return;
+  }
+  
+  try {
+    const values = [[
+      deletedAt,
+      calendarId,
+      calendarName,
+      eventId,
+      eventTitle,
+      originalStart,
+      originalEnd,
+      memberName,
+      coachName
+    ]];
+    
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId: spreadsheetId,
+      range: 'A:I',
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: values }
+    });
+    console.log('스프레드시트에 삭제 일정 기록 성공:', eventTitle);
+  } catch (err) {
+    console.error('스프레드시트에 삭제 일정 로깅 실패:', err);
+    alert('삭제 로그를 기록하는 데 실패했으나 일정 삭제 작업은 계속 진행됩니다.');
+  }
+}
+
+// 4. 날짜별 삭제 일정 조회 팝업(모달) 오픈
+function showDeletedEventsPopup(dateStr) {
+  const backdrop = document.getElementById('deleted-events-backdrop');
+  const dateSpan = document.getElementById('deleted-events-modal-date');
+  const container = document.getElementById('deleted-events-list-container');
+  
+  if (!backdrop || !container) return;
+  
+  dateSpan.textContent = dateStr;
+  container.innerHTML = '';
+  
+  // YYYY-MM-DD 형식으로 원래 시작 날짜가 일치하는 취소 건 필터링
+  const matches = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr));
+  
+  if (matches.length === 0) {
+    container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">해당 날짜에 삭제된 일정이 없습니다.</div>`;
+  } else {
+    // 삭제 시각 역순 정렬 (최근 삭제가 위로 오도록)
+    matches.sort((a, b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+    
+    matches.forEach(item => {
+      // 본래 수업 시간 포맷 가공 (시간 파트만 추출)
+      const getTime = (dateStr) => {
+        try {
+          const parts = dateStr.split(' ');
+          if (parts.length >= 2) return parts[1].substring(0, 5); // HH:mm
+          return dateStr;
+        } catch {
+          return dateStr;
+        }
+      };
+      
+      const timeRange = `${getTime(item.originalStart)} ~ ${getTime(item.originalEnd)}`;
+      const deleteTime = item.deletedAt.substring(5, 16); // MM-DD HH:mm 형태로 축약
+      
+      const card = document.createElement('div');
+      card.className = 'deleted-event-card';
+      card.style.cssText = 'background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;';
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; margin-bottom: 4px;">
+          <span style="font-weight: 700; color: var(--text-main); font-size: 0.88rem;">${item.eventTitle}</span>
+          <span style="font-size: 0.72rem; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 20px; font-weight: 600;">🗑️ 삭제: ${deleteTime}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; color: var(--text-muted);">
+          <div><strong style="color: var(--text-main);">시간:</strong> ${timeRange}</div>
+          <div><strong style="color: var(--text-main);">강사:</strong> ${item.coachName || '미지정'}</div>
+          <div><strong style="color: var(--text-main);">회원:</strong> ${item.memberName || '미지정'}</div>
+          <div style="grid-column: span 2; font-size: 0.75rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><strong style="color: var(--text-main);">캘린더:</strong> ${item.calendarName}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+  
+  openModal(backdrop);
+}
+
+// 5. 모달 닫기 버튼 이벤트 리스너 바인딩
+const deletedEventsBackdrop = document.getElementById('deleted-events-backdrop');
+const closeDeletedEventsBtn = document.getElementById('close-deleted-events-btn');
+const btnCloseDeletedEvents = document.getElementById('btn-close-deleted-events');
+
+if (closeDeletedEventsBtn) {
+  closeDeletedEventsBtn.addEventListener('click', () => closeModal(deletedEventsBackdrop));
+}
+if (btnCloseDeletedEvents) {
+  btnCloseDeletedEvents.addEventListener('click', () => closeModal(deletedEventsBackdrop));
 }
 
 
