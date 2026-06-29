@@ -614,15 +614,52 @@ function initCalendar() {
         badge.innerHTML = `<i class="fa-solid fa-trash-can"></i> ${deletedCount}건`;
         badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 2px 5px; margin-top: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-weight: bold; width: fit-content; z-index: 5;';
         
+        // pointerdown/mousedown 차단하여 드래그 선택 및 셀 클릭(일정 등록 모달) 방어
+        badge.addEventListener('pointerdown', (e) => e.stopPropagation());
+        badge.addEventListener('mousedown', (e) => e.stopPropagation());
         badge.addEventListener('click', (e) => {
           e.preventDefault();
-          e.stopPropagation(); // 새 일정 만들기 레이어 방어
+          e.stopPropagation();
           showDeletedEventsPopup(dateStr);
         });
         
         const frame = info.el.querySelector('.fc-daygrid-day-frame');
         if (frame) {
           frame.appendChild(badge);
+        }
+      }
+    },
+    dayHeaderDidMount: function(info) {
+      if (info.view.type === 'dayGridMonth') return; // 월간 뷰 헤더는 요일(월/화)만 나오므로 제외
+      if (!info.date) return;
+      
+      const date = info.date;
+      const pad = (num) => String(num).padStart(2, '0');
+      const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      
+      const deletedCount = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr)).length;
+      
+      if (deletedCount > 0) {
+        const existingBadge = info.el.querySelector('.deleted-header-badge');
+        if (existingBadge) existingBadge.remove();
+        
+        const badge = document.createElement('span');
+        badge.className = 'deleted-header-badge';
+        badge.innerHTML = `<i class="fa-solid fa-trash-can"></i> ${deletedCount}`;
+        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 1px 4px; margin-left: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; font-weight: bold; vertical-align: middle; z-index: 50;';
+        
+        // pointerdown/mousedown 차단하여 헤더 클릭 드래그 선택 방어
+        badge.addEventListener('pointerdown', (e) => e.stopPropagation());
+        badge.addEventListener('mousedown', (e) => e.stopPropagation());
+        badge.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          showDeletedEventsPopup(dateStr);
+        });
+        
+        const textEl = info.el.querySelector('.fc-col-header-cell-cushion');
+        if (textEl) {
+          textEl.appendChild(badge);
         }
       }
     },
