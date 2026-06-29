@@ -15,6 +15,7 @@ let lastViewType = null;
 const googleEventsCache = new Map();
 let dashboardEventsCache = null;
 let deletedEventsCache = []; // 삭제된 일정 보관용 전역 캐시
+let deletedEventsMap = {};   // 날짜별 빠른 조회를 위한 해시맵 캐시
 
 // 캘린더 새로고침 및 캐시 초기화 헬퍼 함수
 function refetchCalendarEvents(clearCache = false) {
@@ -601,8 +602,8 @@ function initCalendar() {
       const pad = (num) => String(num).padStart(2, '0');
       const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
       
-      // 해당 날짜의 원래 시작일정이 삭제된 내역 필터링
-      const deletedCount = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr)).length;
+      // 해당 날짜의 원래 시작일정이 삭제된 내역 필터링 (O(1) 해시맵 조회)
+      const deletedCount = (deletedEventsMap[dateStr] || []).length;
       
       if (deletedCount > 0) {
         // 이미 생성된 배지가 있다면 중복 추가 방지
@@ -647,7 +648,8 @@ function initCalendar() {
       const pad = (num) => String(num).padStart(2, '0');
       const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
       
-      const deletedCount = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr)).length;
+      // O(1) 해시맵 조회
+      const deletedCount = (deletedEventsMap[dateStr] || []).length;
       
       if (deletedCount > 0) {
         const existingBadge = info.el.querySelector('.deleted-header-badge');
@@ -3283,6 +3285,7 @@ async function fetchDeletedEvents() {
       
       // 방금 헤더를 생성했고 캐시는 없으므로 빈 리스트 리턴
       deletedEventsCache = [];
+      deletedEventsMap = {};
       return [];
     }
     
@@ -3300,11 +3303,24 @@ async function fetchDeletedEvents() {
       coachName: row[8] || ''
     }));
     
+    // 날짜별 빠른 조회를 위한 해시맵 인덱스 구축 (O(1) 성능 최적화)
+    deletedEventsMap = {};
+    deletedEventsCache.forEach(item => {
+      if (item.originalStart) {
+        const dateKey = item.originalStart.split(' ')[0]; // 'YYYY-MM-DD' 추출
+        if (!deletedEventsMap[dateKey]) {
+          deletedEventsMap[dateKey] = [];
+        }
+        deletedEventsMap[dateKey].push(item);
+      }
+    });
+    
     console.log('스프레드시트로부터 로드된 삭제 일정 개수:', deletedEventsCache.length);
     return deletedEventsCache;
   } catch (err) {
     console.error('삭제 목록 로드 중 오류 발생:', err);
     deletedEventsCache = [];
+    deletedEventsMap = {};
     return [];
   }
 }
