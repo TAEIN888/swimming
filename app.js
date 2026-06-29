@@ -550,7 +550,7 @@ function initCalendar() {
     eventDisplay: 'block',   // 모든 일정을 꽉 찬 색상 블록(바 형태)으로 강제 적용
     dayMaxEvents: 6,         // 하루에 보여줄 최대 일정 수 (넘어가면 '+더보기' 버튼 제공)
     allDayText: '종일',
-    eventMinHeight: 38,
+    eventMinHeight: 45,
     events: fetchGoogleEvents,
     eventContent: renderEventContent,
     eventClick: handleEventClick,
@@ -655,10 +655,15 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
           // 개별 이벤트 커스텀 색상(colorId)이 설정되어 있으면 적용하고, 없으면 캘린더 자체 대표색 사용
           let eventColor = calColor;
           if (gEvent.colorId) {
-            if (gEvent.colorId === '7') eventColor = '#06b6d4'; // 1번 레인
-            else if (gEvent.colorId === '4') eventColor = '#8b5cf6'; // 3번 레인
-            else if (gEvent.colorId === '11') eventColor = '#ec4899'; // 4번 레인
-            else if (gEvent.colorId === '5') eventColor = '#f59e0b'; // 개인 교습
+            if (gEvent.colorId === '7') eventColor = '#56b4b4'; // 1번 레인
+            else if (gEvent.colorId === '4') eventColor = '#9b8ae6'; // 3번 레인
+            else if (gEvent.colorId === '11') eventColor = '#df6084'; // 4번 레인
+            else if (gEvent.colorId === '5') eventColor = '#e1973a'; // 개인 교습
+            else if (gEvent.colorId === '9') eventColor = '#6b8ed6'; // 2번 레인 (Blueberry)
+          }
+          // 취소 일정 회색 표시 강제화
+          if (gEvent.summary && gEvent.summary.startsWith('*헤엄하다_취소')) {
+            eventColor = '#a0aec0'; // 소프트 회색
           }
           
           return {
@@ -775,12 +780,17 @@ async function fetchAndRefreshDashboardStats(forceRefresh = false) {
             }
           }
           
-          let eventColor = cal.backgroundColor || '#3b82f6';
+          let eventColor = cal.backgroundColor || '#6b8ed6';
           if (gEvent.colorId) {
-            if (gEvent.colorId === '7') eventColor = '#06b6d4';
-            else if (gEvent.colorId === '4') eventColor = '#8b5cf6';
-            else if (gEvent.colorId === '11') eventColor = '#ec4899';
-            else if (gEvent.colorId === '5') eventColor = '#f59e0b';
+            if (gEvent.colorId === '7') eventColor = '#56b4b4';
+            else if (gEvent.colorId === '4') eventColor = '#9b8ae6';
+            else if (gEvent.colorId === '11') eventColor = '#df6084';
+            else if (gEvent.colorId === '5') eventColor = '#e1973a';
+            else if (gEvent.colorId === '9') eventColor = '#6b8ed6';
+          }
+          // 취소 일정 회색 표시 강제화
+          if (gEvent.summary && gEvent.summary.startsWith('*헤엄하다_취소')) {
+            eventColor = '#a0aec0';
           }
           
           return {
@@ -1048,7 +1058,14 @@ function showEventEditModal(eventData) {
     inpEventEndTime.value = formatTime(defaultEnd);
   }
   
-  inpEventColor.value = eventData.extendedProps.colorVal || '#3b82f6';
+  let loadedColor = eventData.extendedProps.colorVal || '#6b8ed6';
+  // 이전 쨍한 색상들과의 호환성 매핑
+  if (loadedColor === '#06b6d4') loadedColor = '#56b4b4';
+  if (loadedColor === '#3b82f6') loadedColor = '#6b8ed6';
+  if (loadedColor === '#8b5cf6') loadedColor = '#9b8ae6';
+  if (loadedColor === '#ec4899') loadedColor = '#df6084';
+  if (loadedColor === '#f59e0b') loadedColor = '#e1973a';
+  inpEventColor.value = loadedColor;
   
   // 쓰기 권한 검사하여 버튼 및 캘린더 드롭다운 제어
   const calMeta = allCalendars.find(c => c.id === calId);
@@ -1250,10 +1267,11 @@ eventForm.addEventListener('submit', async (e) => {
   const color = inpEventColor.value;
   
   let googleColorId = '1';
-  if (color === '#06b6d4') googleColorId = '7';
-  if (color === '#8b5cf6') googleColorId = '4';
-  if (color === '#ec4899') googleColorId = '11';
-  if (color === '#f59e0b') googleColorId = '5';
+  if (color === '#56b4b4') googleColorId = '7'; // 1번 레인
+  if (color === '#9b8ae6') googleColorId = '4'; // 3번 레인
+  if (color === '#df6084') googleColorId = '11'; // 4번 레인
+  if (color === '#e1973a') googleColorId = '5'; // 개인 교습
+  if (color === '#6b8ed6') googleColorId = '9'; // 2번 레인 (Blueberry)
   
   const eventResource = {
     summary: title,
