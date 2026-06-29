@@ -612,16 +612,22 @@ function initCalendar() {
         const badge = document.createElement('div');
         badge.className = 'deleted-event-badge';
         badge.innerHTML = `<i class="fa-solid fa-trash-can"></i> ${deletedCount}건`;
-        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 2px 5px; margin-top: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-weight: bold; width: fit-content; z-index: 5;';
+        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 2px 5px; margin-top: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-weight: bold; width: fit-content; position: relative; z-index: 99 !important; pointer-events: auto !important;';
         
-        // pointerdown/mousedown 차단하여 드래그 선택 및 셀 클릭(일정 등록 모달) 방어
-        badge.addEventListener('pointerdown', (e) => e.stopPropagation());
-        badge.addEventListener('mousedown', (e) => e.stopPropagation());
-        badge.addEventListener('click', (e) => {
+        // FullCalendar의 포인터 캡처 및 드래그 방지용 다중 이벤트 리스너 통합 (중복 트리거 300ms 디바운스 적용)
+        let isTriggered = false;
+        const triggerPopup = (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (isTriggered) return;
+          isTriggered = true;
           showDeletedEventsPopup(dateStr);
-        });
+          setTimeout(() => { isTriggered = false; }, 300);
+        };
+        
+        badge.addEventListener('pointerdown', triggerPopup);
+        badge.addEventListener('mousedown', triggerPopup);
+        badge.addEventListener('click', triggerPopup);
         
         const frame = info.el.querySelector('.fc-daygrid-day-frame');
         if (frame) {
@@ -646,16 +652,22 @@ function initCalendar() {
         const badge = document.createElement('span');
         badge.className = 'deleted-header-badge';
         badge.innerHTML = `<i class="fa-solid fa-trash-can"></i> ${deletedCount}`;
-        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 1px 4px; margin-left: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; font-weight: bold; vertical-align: middle; z-index: 50;';
+        badge.style.cssText = 'font-size: 0.65rem; color: #ef4444; background: #fee2e2; border-radius: 4px; padding: 1px 4px; margin-left: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; font-weight: bold; vertical-align: middle; position: relative; z-index: 99 !important; pointer-events: auto !important;';
         
-        // pointerdown/mousedown 차단하여 헤더 클릭 드래그 선택 방어
-        badge.addEventListener('pointerdown', (e) => e.stopPropagation());
-        badge.addEventListener('mousedown', (e) => e.stopPropagation());
-        badge.addEventListener('click', (e) => {
+        // FullCalendar의 포인터 캡처 및 드래그 방지용 다중 이벤트 리스너 통합 (중복 트리거 300ms 디바운스 적용)
+        let isTriggered = false;
+        const triggerPopup = (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (isTriggered) return;
+          isTriggered = true;
           showDeletedEventsPopup(dateStr);
-        });
+          setTimeout(() => { isTriggered = false; }, 300);
+        };
+        
+        badge.addEventListener('pointerdown', triggerPopup);
+        badge.addEventListener('mousedown', triggerPopup);
+        badge.addEventListener('click', triggerPopup);
         
         const textEl = info.el.querySelector('.fc-col-header-cell-cushion');
         if (textEl) {
