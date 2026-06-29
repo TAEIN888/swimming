@@ -655,21 +655,21 @@ async function fetchGoogleEvents(fetchInfo, successCallback, failureCallback) {
           // 개별 이벤트 커스텀 색상(colorId)이 설정되어 있으면 적용하고, 없으면 캘린더 자체 대표색 사용
           let eventColor = calColor;
           if (gEvent.colorId) {
-            // 구글 캘린더 11개 색상의 소프트 파스텔 톤 매핑
-            const googlePastelColors = {
-              '1': '#a4bdfc',  // 라벤더 (Lavender)
-              '2': '#7ae7bf',  // 세이지 (Sage/Green)
-              '3': '#dbadff',  // 포도 (Grape/Purple)
-              '4': '#ff887c',  // 플라밍고 (Flamingo/Pink)
-              '5': '#a4bdfc',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
-              '6': '#ffb878',  // 귤 (Mandarin/Orange)
-              '7': '#46d6db',  // 피콕 (Peacock/Cyan)
-              '8': '#e1e1e1',  // 흑연 (Graphite/Gray)
-              '9': '#54b4e9',  // 블루베리 (Blueberry/Blue)
-              '10': '#7ae7bf', // 바질 (Basil) -> 세이지로 매핑
-              '11': '#ff7663'  // 토마토 (Tomato/Red)
+            // 구글 캘린더 11개 색상의 선명한 솔리드 컬러 매핑 (흰색 글씨 가독성 확보)
+            const googleEventColors = {
+              '1': '#7986cb',  // 라벤더 (Lavender)
+              '2': '#33b679',  // 세이지 (Sage/Green)
+              '3': '#8e24aa',  // 포도 (Grape/Purple)
+              '4': '#e67c73',  // 플라밍고 (Flamingo/Pink)
+              '5': '#7986cb',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
+              '6': '#f57c00',  // 귤 (Mandarin/Orange)
+              '7': '#039be5',  // 피콕 (Peacock/Cyan)
+              '8': '#616161',  // 흑연 (Graphite/Gray)
+              '9': '#3f51b5',  // 블루베리 (Blueberry/Blue)
+              '10': '#0b8043', // 바질 (Basil/Green)
+              '11': '#d50000'  // 토마토 (Tomato/Red)
             };
-            eventColor = googlePastelColors[gEvent.colorId] || eventColor;
+            eventColor = googleEventColors[gEvent.colorId] || eventColor;
           }
           
           // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
@@ -796,23 +796,23 @@ async function fetchAndRefreshDashboardStats(forceRefresh = false) {
             }
           }
           
-          let eventColor = cal.backgroundColor || '#54b4e9';
+          let eventColor = resolveCalendarColor(cal);
           if (gEvent.colorId) {
-            // 구글 캘린더 11개 색상의 소프트 파스텔 톤 매핑
-            const googlePastelColors = {
-              '1': '#a4bdfc',  // 라벤더 (Lavender)
-              '2': '#7ae7bf',  // 세이지 (Sage/Green)
-              '3': '#dbadff',  // 포도 (Grape/Purple)
-              '4': '#ff887c',  // 플라밍고 (Flamingo/Pink)
-              '5': '#a4bdfc',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
-              '6': '#ffb878',  // 귤 (Mandarin/Orange)
-              '7': '#46d6db',  // 피콕 (Peacock/Cyan)
-              '8': '#e1e1e1',  // 흑연 (Graphite/Gray)
-              '9': '#54b4e9',  // 블루베리 (Blueberry/Blue)
-              '10': '#7ae7bf', // 바질 (Basil) -> 세이지로 매핑
-              '11': '#ff7663'  // 토마토 (Tomato/Red)
+            // 구글 캘린더 11개 색상의 선명한 솔리드 컬러 매핑 (흰색 글씨 가독성 확보)
+            const googleEventColors = {
+              '1': '#7986cb',  // 라벤더 (Lavender)
+              '2': '#33b679',  // 세이지 (Sage/Green)
+              '3': '#8e24aa',  // 포도 (Grape/Purple)
+              '4': '#e67c73',  // 플라밍고 (Flamingo/Pink)
+              '5': '#7986cb',  // 바나나 (Banana/Yellow) -> 노란색 제외 위해 라벤더로 매핑
+              '6': '#f57c00',  // 귤 (Mandarin/Orange)
+              '7': '#039be5',  // 피콕 (Peacock/Cyan)
+              '8': '#616161',  // 흑연 (Graphite/Gray)
+              '9': '#3f51b5',  // 블루베리 (Blueberry/Blue)
+              '10': '#0b8043', // 바질 (Basil/Green)
+              '11': '#d50000'  // 토마토 (Tomato/Red)
             };
-            eventColor = googlePastelColors[gEvent.colorId] || eventColor;
+            eventColor = googleEventColors[gEvent.colorId] || eventColor;
           }
           
           // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
@@ -1155,41 +1155,15 @@ function isYellowish(color) {
   return r > 200 && g > 170 && b < 120;
 }
 
-// 구글 캘린더 24가지 공식 달력 고유 컬러 매핑 테이블
-const googleCalendarColors = {
-  '1': '#ac725e',  // 코코아
-  '2': '#d06b64',  // 홍당무
-  '3': '#f83a22',  // 빨강 (Cherry)
-  '4': '#fa573c',  // 다크 귤
-  '5': '#ff7537',  // 다크 오렌지
-  '6': '#ffad46',  // 오렌지
-  '7': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
-  '8': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
-  '9': '#54b4e9',  // 노란색 방어용 (블루베리로 대체)
-  '10': '#9fe1e7', // 민트/그린
-  '11': '#b3dc6c', // 연그린
-  '12': '#80d65a', // 그린
-  '13': '#5cbb46', // 진그린
-  '14': '#257e4a', // 포레스트 그린
-  '15': '#29bc9f', // 아쿠아 마린
-  '16': '#7ae7bf', // 터코이즈 (Teal)
-  '17': '#4d8bf5', // 블루베리 (Blue)
-  '18': '#3051bc', // 다크 블루
-  '19': '#8676db', // 라벤더 (Lavender)
-  '20': '#9881db', // 퍼플
-  '21': '#9263af', // 딥 퍼플
-  '22': '#b99aff', // 연보라
-  '23': '#ff97e2', // 핑크
-  '24': '#e03c8c'  // 딥 핑크
-};
-
 // 캘린더의 구글 표준 색상을 해상도 높게 분석해 리턴하는 함수
 function resolveCalendarColor(cal) {
   if (!cal) return '#54b4e9';
-  if (cal.colorId && googleCalendarColors[cal.colorId]) {
-    return googleCalendarColors[cal.colorId];
+  const color = cal.backgroundColor || '#54b4e9';
+  // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
+  if (isYellowish(color)) {
+    return '#54b4e9'; // 소프트 블루로 대체
   }
-  return cal.backgroundColor || '#54b4e9';
+  return color;
 }
 
 // 8-2. FullCalendar 커스텀 일정 렌더링 함수
