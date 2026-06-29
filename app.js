@@ -617,9 +617,13 @@ function initCalendar() {
         // FullCalendar의 포인터 캡처 및 드래그 방지용 다중 이벤트 리스너 통합 (중복 트리거 300ms 디바운스 적용)
         let isTriggered = false;
         const triggerPopup = (e) => {
+          console.log(`[Badge Debug] Day cell badge triggered via event: ${e.type} for date: ${dateStr}`);
           e.preventDefault();
           e.stopPropagation();
-          if (isTriggered) return;
+          if (isTriggered) {
+            console.log('[Badge Debug] Day cell badge trigger ignored due to debounce lock');
+            return;
+          }
           isTriggered = true;
           showDeletedEventsPopup(dateStr);
           setTimeout(() => { isTriggered = false; }, 300);
@@ -657,9 +661,13 @@ function initCalendar() {
         // FullCalendar의 포인터 캡처 및 드래그 방지용 다중 이벤트 리스너 통합 (중복 트리거 300ms 디바운스 적용)
         let isTriggered = false;
         const triggerPopup = (e) => {
+          console.log(`[Badge Debug] Day header badge triggered via event: ${e.type} for date: ${dateStr}`);
           e.preventDefault();
           e.stopPropagation();
-          if (isTriggered) return;
+          if (isTriggered) {
+            console.log('[Badge Debug] Day header badge trigger ignored due to debounce lock');
+            return;
+          }
           isTriggered = true;
           showDeletedEventsPopup(dateStr);
           setTimeout(() => { isTriggered = false; }, 300);
@@ -1573,13 +1581,20 @@ settingsForm.addEventListener('submit', (e) => {
 
 // 공통 모달 열기/닫기
 function openModal(modalBackdrop) {
-  modalBackdrop.classList.add('active');
+  console.log('[Modal Debug] openModal called with element ID:', modalBackdrop ? modalBackdrop.id : 'null');
+  if (modalBackdrop) {
+    modalBackdrop.classList.add('active');
+    console.log('[Modal Debug] Added active class to:', modalBackdrop.id, 'classList is now:', modalBackdrop.className);
+  }
 }
 
 function closeModal(modalBackdrop) {
-  modalBackdrop.classList.remove('active');
-  if (modalBackdrop === eventBackdrop) {
-    clearTempOptions();
+  console.log('[Modal Debug] closeModal called with element ID:', modalBackdrop ? modalBackdrop.id : 'null');
+  if (modalBackdrop) {
+    modalBackdrop.classList.remove('active');
+    if (modalBackdrop === eventBackdrop) {
+      clearTempOptions();
+    }
   }
 }
 
@@ -3363,17 +3378,36 @@ async function logDeletedEventToSpreadsheet({
 
 // 4. 날짜별 삭제 일정 조회 팝업(모달) 오픈
 function showDeletedEventsPopup(dateStr) {
+  console.log(`[Popup Debug] showDeletedEventsPopup called with dateStr: "${dateStr}"`);
+  
   const backdrop = document.getElementById('deleted-events-backdrop');
   const dateSpan = document.getElementById('deleted-events-modal-date');
   const container = document.getElementById('deleted-events-list-container');
   
-  if (!backdrop || !container) return;
+  console.log('[Popup Debug] DOM Element status:', {
+    backdrop: !!backdrop,
+    dateSpan: !!dateSpan,
+    container: !!container
+  });
   
-  dateSpan.textContent = dateStr;
+  if (!backdrop || !container) {
+    console.error('[Popup Debug] Error: backdrop or container is missing from the DOM!');
+    return;
+  }
+  
+  if (dateSpan) dateSpan.textContent = dateStr;
   container.innerHTML = '';
   
+  console.log(`[Popup Debug] Total deleted events in cache: ${deletedEventsCache.length}`);
+  
   // YYYY-MM-DD 형식으로 원래 시작 날짜가 일치하는 취소 건 필터링
-  const matches = deletedEventsCache.filter(e => e.originalStart.startsWith(dateStr));
+  const matches = deletedEventsCache.filter(e => {
+    const isMatch = e.originalStart.startsWith(dateStr);
+    console.log(`[Popup Debug] Filtering: comparing event "${e.eventTitle}" originalStart "${e.originalStart}" with "${dateStr}" -> match: ${isMatch}`);
+    return isMatch;
+  });
+  
+  console.log(`[Popup Debug] Found ${matches.length} matching deleted events for date: ${dateStr}`);
   
   if (matches.length === 0) {
     container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">해당 날짜에 삭제된 일정이 없습니다.</div>`;
