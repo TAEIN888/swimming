@@ -641,23 +641,19 @@ body {
   padding: 4px 6px !important;
 }
 
-/* 시간축 뷰 내의 일정이 컬럼 영역 밖으로 침범하여 옆 요일/강사 칸을 침범하는 것 차단 */
-.fc-timegrid-col-events {
-  overflow: hidden !important;
-}
-
-/* 시간축 뷰 내의 개별 일정 배치 단위(harness)가 다중 겹침 시 극단적으로 얇은 실선으로 쪼개지는 현상 제어 */
+/* 시간축 뷰 내의 개별 일정 배치 단위(harness)가 다중 겹침 시 균등 분할 지원 */
 .fc-timegrid-event-harness {
-  min-width: 65px !important; /* 겹치더라도 최소 65px 가로폭을 확보해 글씨를 부분 노출하고, 겹쳐서 포개지도록 함 (구글 캘린더 스타일 카드 레이어링) */
   transition: z-index 0.1s ease;
 }
 
-/* 마우스 호버 시 좁은 일정이 가로로 확장되며 맨 앞으로 올라와 읽기 편하게 하는 효과 */
+/* 마우스 호버 시 좁아진 일정이 가로/세로로 팽창하며 맨 앞으로 확실하게 튀어나와 읽기 편하게 하는 효과 */
 .fc-timegrid-event-harness:hover {
-  z-index: 999 !important;
+  z-index: 9999 !important; /* 이웃 요일 컬럼의 일정보다 확실하게 위에 얹어지도록 높은 z-index 설정 */
 }
 .fc-timegrid-event-harness:hover .fc-timegrid-event {
+  width: max-content !important;
   min-width: 100% !important;
+  max-width: 280px !important;
   height: auto !important;
   min-height: 100% !important;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 6px 6px rgba(0, 0, 0, 0.1) !important;
