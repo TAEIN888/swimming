@@ -655,12 +655,12 @@ body {
 }
 
 
-/* 겹치는 일정이 많아질 때 각 일정 카드의 좌우 마진/여백을 타이트하게 줄여 가로폭 최대 확보 */
+/* 겹치는 일정이 많아질 때 각 일정 카드의 좌우 마진/여백을 타이트하게 줄여 가로폭 최대 확보 (음수 마진으로 빈 틈 강제 메움) */
 .fc-timegrid-event-harness-inset {
-  margin-right: 1px !important; /* 기본 8~10px 여백을 1px로 대폭 축소 */
+  margin-right: -5px !important; /* 기본 8~10px의 물리 공백을 음수 마진으로 메워 가로 폭 극대화 */
 }
 .fc-timegrid-event {
-  margin: 0 !important;
+  margin: 0 -2px 0 0 !important; /* 우측으로 카드를 미세하게 확장해 겹침 빈틈 차단 */
 }
 
 /* 시간축 뷰 내의 개별 일정 배치 단위(harness)가 다중 겹침 시 균등 분할 지원 */
