@@ -1,4 +1,4 @@
-import { CONFIG, saveConfig, loadSecrets } from './config.js';
+import { CONFIG, saveConfig, loadSecrets, secrets } from './config.js';
 
 // 애플리케이션 상태 관리
 let tokenClient;
@@ -420,11 +420,13 @@ async function fetchCalendarList() {
       
       item.innerHTML = `
         <input type="checkbox" id="cal-check-${cal.id}" data-id="${cal.id}" data-is-my-cal="${isMyCal}" ${isChecked ? 'checked' : ''} style="cursor: pointer;">
-        <span class="calendar-checkbox-color" style="background-color: ${color};"></span>
-        <span class="calendar-checkbox-label" title="${cal.summary}">${cal.summary}</span>
+        <div class="calendar-color-picker-wrapper" style="position: relative; display: inline-block; cursor: pointer; width: 12px; height: 12px; border-radius: 50%; margin: 0 8px; flex-shrink: 0; background-color: ${color}; border: 1px solid var(--border-color);">
+          <input type="color" class="calendar-color-input" data-id="${cal.id}" value="${color}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: none;">
+        </div>
+        <span class="calendar-checkbox-label" title="${cal.summary}" style="cursor: pointer;">${cal.summary}</span>
       `;
       
-      const checkbox = item.querySelector('input');
+      const checkbox = item.querySelector('input[type="checkbox"]');
       checkbox.addEventListener('change', (e) => {
         const calId = e.target.getAttribute('data-id');
         if (e.target.checked) {
@@ -434,6 +436,30 @@ async function fetchCalendarList() {
         }
         refetchCalendarEvents(true);
       });
+      
+      const colorInput = item.querySelector('.calendar-color-input');
+      if (colorInput) {
+        colorInput.addEventListener('change', (e) => {
+          const calId = e.target.getAttribute('data-id');
+          const newColor = e.target.value;
+          
+          try {
+            const localColorsStr = localStorage.getItem('G_CALENDAR_COLORS') || '{}';
+            const localColors = JSON.parse(localColorsStr);
+            localColors[calId] = newColor;
+            localStorage.setItem('G_CALENDAR_COLORS', JSON.stringify(localColors));
+          } catch (err) {
+            console.error('Failed to save calendar colors to localStorage:', err);
+          }
+          
+          const wrapper = colorInput.closest('.calendar-color-picker-wrapper');
+          if (wrapper) {
+            wrapper.style.backgroundColor = newColor;
+          }
+          
+          refetchCalendarEvents(true);
+        });
+      }
       
       if (isMyCal) {
         myGroupList.appendChild(item);
@@ -1271,8 +1297,29 @@ function isYellowish(color) {
 // 캘린더의 구글 표준 색상을 해상도 높게 분석해 리턴하는 함수
 function resolveCalendarColor(cal) {
   if (!cal) return '#54b4e9';
+  
+  // 1. localStorage 커스텀 컬러 체크
+  try {
+    const localColorsStr = localStorage.getItem('G_CALENDAR_COLORS');
+    if (localColorsStr) {
+      const localColors = JSON.parse(localColorsStr);
+      if (localColors[cal.id]) {
+        return localColors[cal.id];
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse G_CALENDAR_COLORS from localStorage:', e);
+  }
+  
+  // 2. secrets.json 커스텀 컬러 체크 (개발/운영 초기 기본값 지원)
+  if (secrets && secrets.calendarColors && secrets.calendarColors[cal.id]) {
+    return secrets.calendarColors[cal.id];
+  }
+  
+  // 3. 구글 표준 색상 사용
   const color = cal.backgroundColor || '#54b4e9';
-  // 노란색 계열 방어 코드 (캘린더 색상이 노란색 계열인 경우)
+  
+  // 노란색 계열 방어 코드 (단, 사용자가 수동 지정한 색상은 방어 코드를 타지 않게 분리!)
   if (isYellowish(color)) {
     return '#54b4e9'; // 소프트 블루로 대체
   }
