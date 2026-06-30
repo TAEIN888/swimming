@@ -1928,6 +1928,12 @@ function setupEventListeners() {
         isModalClosed = true;
       }
       
+      const delBackdrop = document.getElementById('deleted-events-backdrop');
+      if (delBackdrop && delBackdrop.classList.contains('active')) {
+        closeModal(delBackdrop);
+        isModalClosed = true;
+      }
+      
       // 모달이 열려 있어서 닫았다면, Escape 키 이벤트가 전파되어 FullCalendar 더보기 팝업까지 한꺼번에 닫히는 것을 방지
       if (isModalClosed) {
         e.stopPropagation();
@@ -3505,7 +3511,6 @@ function showDeletedEventsPopup(dateStr) {
       card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; margin-bottom: 4px;">
           <span style="font-weight: 700; color: var(--text-main); font-size: 0.88rem;">${item.eventTitle}</span>
-          <span style="font-size: 0.72rem; color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 20px; font-weight: 600;">🗑️ 삭제됨</span>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; color: var(--text-muted);">
           <div><strong style="color: var(--text-main);">시간:</strong> ${timeRange}</div>
