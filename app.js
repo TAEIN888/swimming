@@ -3319,9 +3319,53 @@ async function fetchDeletedEvents() {
   }
   
   try {
+    // 스프레드시트 구조 조회하여 '삭제된일정' 시트 존재 여부 및 첫 번째 시트 이름 파악
+    const metadata = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId
+    });
+    const sheets = metadata.result.sheets || [];
+    const sheetTitles = sheets.map(s => s.properties.title);
+    
+    let targetSheetName = '삭제된일정';
+    
+    // 만약 '삭제된일정' 시트가 없고 '시트1'이나 'Sheet1'이 첫 번째 시트라면 자동 변경 시도 또는 생성
+    if (!sheetTitles.includes('삭제된일정')) {
+      const firstSheet = sheets[0];
+      const firstSheetTitle = firstSheet ? firstSheet.properties.title : '시트1';
+      if (firstSheetTitle === '시트1' || firstSheetTitle === 'Sheet1') {
+        console.log(`기본 시트명 '${firstSheetTitle}'을 '삭제된일정'으로 변경합니다.`);
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          resource: {
+            requests: [{
+              updateSheetProperties: {
+                properties: {
+                  sheetId: firstSheet.properties.sheetId,
+                  title: '삭제된일정'
+                },
+                fields: 'title'
+              }
+            }]
+          }
+        });
+      } else {
+        console.log("'삭제된일정' 시트를 새로 생성합니다.");
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          resource: {
+            requests: [{
+              addSheet: {
+                properties: { title: '삭제된일정' }
+              }
+            }]
+          }
+        });
+      }
+    }
+    
     const response = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
-      range: 'A1:I' // 헤더 포함 전체 데이터 가져오기 (A1부터 시작)
+      range: `${targetSheetName}!A1:I` // 헤더 포함 전체 데이터 가져오기
     });
     
     const rows = response.result.values || [];
@@ -3334,14 +3378,14 @@ async function fetchDeletedEvents() {
       if (rows.length > 0 && rows[0][0] !== '삭제 일시') {
         await gapi.client.sheets.spreadsheets.values.append({
           spreadsheetId: spreadsheetId,
-          range: 'A:I',
+          range: `${targetSheetName}!A:I`,
           valueInputOption: 'USER_ENTERED',
           resource: { values: [rows[0]] }
         });
         console.log('기존에 1행에 들어있던 일정을 2행 이후로 안전하게 이동시켰습니다.');
       }
       
-      await initializeSpreadsheetHeaders(spreadsheetId);
+      await initializeSpreadsheetHeaders(spreadsheetId, targetSheetName);
       
       // 방금 헤더를 생성했고 캐시는 없으므로 빈 리스트 리턴
       deletedEventsCache = [];
@@ -3386,7 +3430,7 @@ async function fetchDeletedEvents() {
 }
 
 // 2. 스프레드시트 초기 헤더 생성 헬퍼
-async function initializeSpreadsheetHeaders(spreadsheetId) {
+async function initializeSpreadsheetHeaders(spreadsheetId, sheetName = '삭제된일정') {
   const headers = [[
     '삭제 일시',
     '캘린더 ID',
@@ -3401,11 +3445,11 @@ async function initializeSpreadsheetHeaders(spreadsheetId) {
   
   await gapi.client.sheets.spreadsheets.values.update({
     spreadsheetId: spreadsheetId,
-    range: 'A1:I1',
+    range: `${sheetName}!A1:I1`,
     valueInputOption: 'USER_ENTERED',
     resource: { values: headers }
   });
-  console.log('스프레드시트 헤더(A1:I1)가 성공적으로 초기화되었습니다.');
+  console.log(`스프레드시트 헤더(${sheetName}!A1:I1)가 성공적으로 초기화되었습니다.`);
 }
 
 // 3. 일정을 실제 지우기 전 스프레드시트에 내역 누적 기록
@@ -3441,7 +3485,7 @@ async function logDeletedEventToSpreadsheet({
     
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: spreadsheetId,
-      range: 'A:I',
+      range: '삭제된일정!A:I',
       valueInputOption: 'USER_ENTERED',
       resource: { values: values }
     });
