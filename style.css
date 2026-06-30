@@ -642,7 +642,10 @@ body {
 }
 
 /* 호버된 일정이 속한 컬럼의 z-index를 끌어올려 우측 요일에 위치한 일정들에 가려지지 않도록 조치 */
-.fc-timegrid-col:has(.fc-timegrid-event-harness:hover) {
+.fc-timegrid-col:has(.fc-timegrid-event-harness:hover),
+.fc-timegrid-col:has(.fc-timegrid-event:hover),
+.fc-timegrid-col:has(.single-event-container:hover),
+.fc-timegrid-col:has(.merged-event-item:hover) {
   z-index: 99 !important;
 }
 
@@ -656,14 +659,21 @@ body {
 
 /* 시간축 뷰 내의 개별 일정 배치 단위(harness)가 다중 겹침 시 균등 분할 지원 */
 .fc-timegrid-event-harness {
+  padding: 0 1px !important; /* 좌우 여백 패딩을 줄여서 실제 카드 크기 최대화 */
   transition: z-index 0.1s ease;
 }
 
 /* 마우스 호버 시 좁아진 일정이 가로/세로로 팽창하며 맨 앞으로 확실하게 튀어나와 읽기 편하게 하는 효과 */
-.fc-timegrid-event-harness:hover {
-  z-index: 9999 !important; /* 이웃 요일 컬럼의 일정보다 확실하게 위에 얹어지도록 높은 z-index 설정 */
+.fc-timegrid-event-harness:hover,
+.fc-timegrid-event-harness:has(.fc-timegrid-event:hover),
+.fc-timegrid-event-harness:has(.single-event-container:hover),
+.fc-timegrid-event-harness:has(.merged-event-item:hover) {
+  z-index: 99999 !important; /* 동시간대 및 이웃 요일 컬럼의 일정보다 확실하게 위에 얹어지도록 높은 z-index 설정 */
 }
-.fc-timegrid-event-harness:hover .fc-timegrid-event {
+.fc-timegrid-event-harness:hover .fc-timegrid-event,
+.fc-timegrid-event-harness:has(.fc-timegrid-event:hover) .fc-timegrid-event,
+.fc-timegrid-event-harness:has(.single-event-container:hover) .fc-timegrid-event,
+.fc-timegrid-event-harness:has(.merged-event-item:hover) .fc-timegrid-event {
   width: max-content !important;
   min-width: 100% !important;
   max-width: 280px !important;
