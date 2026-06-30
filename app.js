@@ -604,7 +604,7 @@ function initCalendar() {
     eventDisplay: 'block',   // 모든 일정을 꽉 찬 색상 블록(바 형태)으로 강제 적용
     dayMaxEvents: 6,         // 하루에 보여줄 최대 일정 수 (넘어가면 '+더보기' 버튼 제공)
     allDayText: '종일',
-    eventMinHeight: 45,
+    eventMinHeight: 20,
     slotEventOverlap: true, // 동시간대 다수 일정 발생 시 너무 가늘게 쪼개지지 않도록 중첩 허용 (기본값 복원)
     events: fetchGoogleEvents,
     eventContent: renderEventContent,

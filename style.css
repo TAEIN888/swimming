@@ -652,9 +652,9 @@ body {
   z-index: 999 !important;
 }
 .fc-timegrid-event-harness:hover .fc-timegrid-event {
-  width: max-content !important;
   min-width: 100% !important;
-  max-width: 280px !important;
+  height: auto !important;
+  min-height: 100% !important;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 6px 6px rgba(0, 0, 0, 0.1) !important;
 }
 .fc-timegrid-event-harness:hover .single-event-title,
