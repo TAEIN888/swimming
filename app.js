@@ -175,6 +175,9 @@ async function attemptSessionRestore() {
           console.log('캘린더 목록 로드 시도...');
           await fetchCalendarList();
           
+          console.log('캘린더 커스텀 색상 로드 시도...');
+          await loadCalendarColorsFromSheet();
+          
           console.log('삭제된 일정 목록 로드 시도...');
           await fetchDeletedEvents();
           
@@ -311,6 +314,9 @@ async function handleAuthCallback(tokenResponse) {
     
     // 다중 캘린더 목록 조회 및 필터 구성
     await fetchCalendarList();
+    
+    // 캘린더 커스텀 색상 로드
+    await loadCalendarColorsFromSheet();
     
     // 삭제된 일정 목록 로드
     await fetchDeletedEvents();
@@ -3525,6 +3531,151 @@ if (closeDeletedEventsBtn) {
 }
 if (btnCloseDeletedEvents) {
   btnCloseDeletedEvents.addEventListener('click', () => closeModal(deletedEventsBackdrop));
+}
+
+
+// ==========================================
+// 🎨 캘린더 커스텀 색상 구글 스프레드시트 동기화 기능
+// ==========================================
+
+let spreadsheetColorsCache = {}; // 구글 시트에서 가져온 색상 캐시
+
+// 1. 색상 설정용 시트 체크 및 생성 (삭제 로그용 스프레드시트 17Qe4GjnKHiV6DkbtPht06QnGyWkyPT4_Q466INd8h9c 공유 사용)
+async function checkOrCreateColorSheet() {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) return;
+
+  try {
+    const response = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId
+    });
+    
+    const sheets = response.result.sheets || [];
+    const hasColorSheet = sheets.some(s => s.properties.title === '캘린더색상');
+    
+    if (!hasColorSheet) {
+      console.log("'캘린더색상' 시트가 존재하지 않습니다. 새로 생성합니다.");
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        resource: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: '캘린더색상'
+                }
+              }
+            }
+          ]
+        }
+      });
+      
+      // 헤더 추가
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: spreadsheetId,
+        range: '캘린더색상!A1:D1',
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [['캘린더 ID', '지정 색상', '캘린더명', '최종 변경일']]
+        }
+      });
+      console.log("'캘린더색상' 시트 및 헤더 생성이 완료되었습니다.");
+    }
+  } catch (err) {
+    console.error('Error checking or creating calendar color sheet:', err);
+  }
+}
+
+// 2. 시트로부터 색상 데이터 로드
+async function loadCalendarColorsFromSheet() {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) {
+    console.warn('스프레드시트 ID가 비어있어 커스텀 색상을 가져올 수 없습니다.');
+    return {};
+  }
+
+  try {
+    await checkOrCreateColorSheet();
+    
+    const response = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId,
+      range: '캘린더색상!A2:D100'
+    });
+    
+    const rows = response.result.values || [];
+    spreadsheetColorsCache = {};
+    rows.forEach(row => {
+      const calId = row[0];
+      const color = row[1];
+      if (calId && color) {
+        spreadsheetColorsCache[calId] = color;
+      }
+    });
+    
+    console.log('스프레드시트에서 로드한 캘린더 커스텀 색상 개수:', Object.keys(spreadsheetColorsCache).length);
+    return spreadsheetColorsCache;
+  } catch (err) {
+    console.error('스프레드시트 캘린더 색상 데이터 조회 실패:', err);
+    return {};
+  }
+}
+
+// 3. 시트에 색상 업데이트 또는 추가
+async function saveCalendarColorToSheet(calId, color, calName) {
+  const spreadsheetId = CONFIG.getSpreadsheetId();
+  if (!spreadsheetId) {
+    console.warn('스프레드시트 ID가 없어 구글 시트 색상 저장을 생략합니다.');
+    return;
+  }
+
+  try {
+    // 1. 현재 색상 시트에서 캘린더 ID 중복 행이 있는지 검사
+    const response = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId,
+      range: '캘린더색상!A2:A100'
+    });
+    
+    const rows = response.result.values || [];
+    let existingRowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === calId) {
+        existingRowIndex = i + 2; // 2부터 시작하는 실제 행 번호 (A2는 2행)
+        break;
+      }
+    }
+    
+    const updateTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    const rowValues = [[calId, color, calName, updateTime]];
+    
+    if (existingRowIndex !== -1) {
+      // 2-A. 기존 행 덮어쓰기 업데이트
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: spreadsheetId,
+        range: `캘린더색상!A${existingRowIndex}:D${existingRowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: rowValues
+        }
+      });
+      console.log(`구글 시트 캘린더 색상 업데이트 성공 (${calName} - ${color}) 행: ${existingRowIndex}`);
+    } else {
+      // 2-B. 새 행으로 데이터 추가
+      await gapi.client.sheets.spreadsheets.values.append({
+        spreadsheetId: spreadsheetId,
+        range: '캘린더색상!A:D',
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: rowValues
+        }
+      });
+      console.log(`구글 시트 신규 캘린더 색상 추가 성공 (${calName} - ${color})`);
+    }
+    
+    // 로컬 메모리 캐시 동기화
+    spreadsheetColorsCache[calId] = color;
+  } catch (err) {
+    console.error('구글 시트 색상 저장 실패:', err);
+  }
 }
 
 
