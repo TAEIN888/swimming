@@ -643,7 +643,7 @@ body {
 
 /* 마우스 호버 시 좁은 일정이 가로로 확장되며 맨 앞으로 올라와 읽기 편하게 하는 효과 */
 .fc-timegrid-event-harness:hover {
-  z-index: 50 !important;
+  z-index: 999 !important;
 }
 .fc-timegrid-event-harness:hover .fc-timegrid-event {
   width: max-content !important;
