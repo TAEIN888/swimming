@@ -641,6 +641,19 @@ body {
   padding: 4px 6px !important;
 }
 
+/* 호버된 일정이 속한 컬럼의 z-index를 끌어올려 우측 요일에 위치한 일정들에 가려지지 않도록 조치 */
+.fc-timegrid-col:has(.fc-timegrid-event-harness:hover) {
+  z-index: 99 !important;
+}
+
+/* 겹치는 일정이 많아질 때 각 일정 카드의 좌우 마진/여백을 타이트하게 줄여 가로폭 최대 확보 */
+.fc-timegrid-event-harness-inset {
+  margin-right: 1px !important; /* 기본 8~10px 여백을 1px로 대폭 축소 */
+}
+.fc-timegrid-event {
+  margin: 0 !important;
+}
+
 /* 시간축 뷰 내의 개별 일정 배치 단위(harness)가 다중 겹침 시 균등 분할 지원 */
 .fc-timegrid-event-harness {
   transition: z-index 0.1s ease;

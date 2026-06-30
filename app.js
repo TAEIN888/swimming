@@ -1375,7 +1375,7 @@ function renderEventContent(arg) {
       
       const timeRange = formatSubTime(sub.start, sub.end);
       html += `
-        <div class="merged-event-item" data-idx="${idx}" style="background: ${color} !important; border: none !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 3px 5px !important; border-radius: 4px !important; width: 100%; box-sizing: border-box; overflow: hidden;" title="${sub.title} (${timeRange})">
+        <div class="merged-event-item" data-idx="${idx}" style="background: ${color} !important; border: none !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 2px 3px !important; border-radius: 4px !important; width: 100%; box-sizing: border-box; overflow: hidden;" title="${sub.title} (${timeRange})">
           <span class="merged-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; color: #ffffff !important; display: block; text-align: left; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;">${sub.title}</span>
           <span class="merged-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left; display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${timeRange}</span>
         </div>
@@ -1393,7 +1393,7 @@ function renderEventContent(arg) {
   const displayTime = arg.timeText ? arg.timeText.replace(' - ', '-') : '';
   return {
     html: `
-      <div class="single-event-container" style="background: ${color} !important; border: none !important; border-radius: 4px !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 3px 5px !important; height: 100%; box-sizing: border-box; overflow: hidden;" title="${event.title} (${displayTime})">
+      <div class="single-event-container" style="background: ${color} !important; border: none !important; border-radius: 4px !important; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 2px 3px !important; height: 100%; box-sizing: border-box; overflow: hidden;" title="${event.title} (${displayTime})">
         <span class="single-event-title" style="font-weight: 600; font-size: 0.72rem; line-height: 1.2; color: #ffffff !important; display: block; text-align: left; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px;">${event.title}</span>
         <span class="single-event-time" style="font-size: 0.62rem; font-weight: 500; color: rgba(255, 255, 255, 0.8) !important; line-height: 1.0; text-align: left; display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayTime}</span>
       </div>
