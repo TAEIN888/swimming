@@ -641,13 +641,19 @@ body {
   padding: 4px 6px !important;
 }
 
-/* 호버된 일정이 속한 컬럼의 z-index를 끌어올려 우측 요일에 위치한 일정들에 가려지지 않도록 조치 */
-.fc-timegrid-col:has(.fc-timegrid-event-harness:hover),
-.fc-timegrid-col:has(.fc-timegrid-event:hover),
-.fc-timegrid-col:has(.single-event-container:hover),
-.fc-timegrid-col:has(.merged-event-item:hover) {
-  z-index: 99 !important;
+/* 호버된 일정이 속한 컬럼 프레임 및 이벤트 컨테이너의 z-index를 끌어올려 우측 요일에 위치한 일정들에 가려지지 않도록 조치 (display: table-cell인 td 대신 div 프레임 제어) */
+.fc-timegrid-col-frame:has(.fc-timegrid-event-harness:hover),
+.fc-timegrid-col-frame:has(.fc-timegrid-event:hover),
+.fc-timegrid-col-frame:has(.single-event-container:hover),
+.fc-timegrid-col-frame:has(.merged-event-item:hover),
+.fc-timegrid-col-events:has(.fc-timegrid-event-harness:hover),
+.fc-timegrid-col-events:has(.fc-timegrid-event:hover),
+.fc-timegrid-col-events:has(.single-event-container:hover),
+.fc-timegrid-col-events:has(.merged-event-item:hover) {
+  z-index: 999 !important; /* 부모 기둥 프레임 자체의 레이어 등급을 상승 */
+  position: relative !important; /* z-index 작동을 위해 포지션 확립 */
 }
+
 
 /* 겹치는 일정이 많아질 때 각 일정 카드의 좌우 마진/여백을 타이트하게 줄여 가로폭 최대 확보 */
 .fc-timegrid-event-harness-inset {
