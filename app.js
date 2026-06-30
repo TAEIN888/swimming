@@ -605,7 +605,7 @@ function initCalendar() {
     dayMaxEvents: 6,         // 하루에 보여줄 최대 일정 수 (넘어가면 '+더보기' 버튼 제공)
     allDayText: '종일',
     eventMinHeight: 45,
-    slotEventOverlap: false, // 겹치는 일정이 옆으로 밀려 왼쪽 빈 여백이 비대칭하게 생기는 현상 차단 (구글 캘린더 스타일 정렬)
+    slotEventOverlap: true, // 동시간대 다수 일정 발생 시 너무 가늘게 쪼개지지 않도록 중첩 허용 (기본값 복원)
     events: fetchGoogleEvents,
     eventContent: renderEventContent,
     eventClick: handleEventClick,
