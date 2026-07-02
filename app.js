@@ -168,10 +168,6 @@ async function attemptSessionRestore() {
           gapi.client.setToken({ access_token: savedToken });
           console.log('GAPI setToken 적용 완료 (access_token 매핑)');
           
-          hideAuthError();
-          updateProfileUI();
-          showDashboard();
-          
           console.log('캘린더 목록 로드 시도...');
           await fetchCalendarList();
           
@@ -183,6 +179,10 @@ async function attemptSessionRestore() {
           
           console.log('달력 인스턴스 초기화 시도...');
           initCalendar();
+          
+          hideAuthError();
+          updateProfileUI();
+          showDashboard();
           
           console.log('로그인 세션 복원 완료!');
         } catch (err) {
