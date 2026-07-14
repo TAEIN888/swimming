@@ -590,7 +590,7 @@ function initCalendar() {
   const calendarEl = document.getElementById('calendar-container');
   
   calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
+    initialView: 'timeGridWeek',
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
