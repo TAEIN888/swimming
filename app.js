@@ -364,20 +364,7 @@ async function fetchCalendarList() {
     const response = await gapi.client.calendar.calendarList.list();
     allCalendars = response.result.items || [];
     
-    // [진단용 로그] 구글 API에서 반환되는 색상 데이터 출력
-    console.group('=== 📅 구글 캘린더 색상 연동 진단 로그 (Google Calendar Color Diagnostics) ===');
-    console.log('구글 API에서 반환받은 캘린더 리스트와 색상 설정값입니다. 색상이 불일치하는 경우 이 로그를 확인해 주세요.');
-    allCalendars.forEach(cal => {
-      const resolved = resolveCalendarColor(cal);
-      console.log(
-        `%c■ %c${cal.summary}%c\n- ID: ${cal.id}\n- API BackgroundColor: ${cal.backgroundColor}\n- API ColorId: ${cal.colorId || '없음'}\n- 최종 적용된 색상: ${resolved}`,
-        `color: ${cal.backgroundColor}; font-size: 14px;`,
-        'font-weight: bold; color: #1e293b; font-size: 12px;',
-        'color: #64748b; font-size: 11px;'
-      );
-    });
-    console.groupEnd();
-    
+
     calendarListContainer.innerHTML = '';
     
     // 두 그룹을 보관할 엘리먼트 생성
