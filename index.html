@@ -18,6 +18,21 @@
 </head>
 <body>
 
+  <!-- 세션 복원 마스킹 로딩 화면 -->
+  <div id="session-restore-mask" class="loading-overlay-global" style="display: none;">
+    <div class="glass-card" style="padding: 2.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; min-width: 320px; box-shadow: var(--shadow-2xl);">
+      <div class="auth-logo" style="margin-bottom: 0;">
+        <img src="https://search.pstatic.net/common/?src=https%3A%2F%2Fldb-phinf.pstatic.net%2F20220118_125%2F1642434204174TEfSa_JPEG%2F21746C71-4923-4FA2-B59B-496197509C70.jpeg" alt="헤엄하다 로고">
+      </div>
+      <div class="spinner-container" style="position: relative; width: 40px; height: 40px; margin-top: 0.5rem;">
+        <div class="double-bounce1"></div>
+        <div class="double-bounce2"></div>
+      </div>
+      <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-color); font-family: var(--font-title);">로그인 세션 복원 중...</div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">기존 로그인 상태를 검증하고<br>일정 데이터를 안전하게 불러오고 있습니다.</div>
+    </div>
+  </div>
+
   <!-- 1. 로그인 스크린 -->
   <div id="login-screen" class="auth-container">
     <div class="glass-card auth-card">

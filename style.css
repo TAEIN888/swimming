@@ -1920,3 +1920,26 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
   padding-top: 1.25rem;
   border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
+
+/* 글로벌 로딩 오버레이 */
+.loading-overlay-global {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(244, 246, 250, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  transition: opacity 0.3s ease;
+}
+
+/* 다크모드 대응을 위한 로딩 오버레이 배경색 조절 */
+@media (prefers-color-scheme: dark) {
+  .loading-overlay-global {
+    background: rgba(15, 23, 42, 0.85);
+  }
+}

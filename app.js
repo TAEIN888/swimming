@@ -30,6 +30,7 @@ function refetchCalendarEvents(clearCache = false) {
 
 // DOM 요소 참조
 const loginScreen = document.getElementById('login-screen');
+const sessionRestoreMask = document.getElementById('session-restore-mask');
 const appScreen = document.getElementById('app-screen');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const tempSetupBtn = document.getElementById('temp-setup-btn');
@@ -214,6 +215,8 @@ async function attemptSessionRestore() {
   
   if (savedToken && savedUser && savedTokenResponse) {
     console.log('기존 로그인 세션 복원 시도 중...');
+    if (sessionRestoreMask) sessionRestoreMask.style.display = 'flex';
+    
     const checkGapi = setInterval(async () => {
       if (gapiInited) {
         clearInterval(checkGapi);
@@ -248,8 +251,10 @@ async function attemptSessionRestore() {
             
             startSessionRefreshTimer(); // 백그라운드 세션 타이머 가동
             console.log('로그인 세션 복원 완료!');
+            if (sessionRestoreMask) sessionRestoreMask.style.display = 'none';
           } catch (err) {
             console.error('세션 복원 프로세스 중 심각한 예외 발생:', err);
+            if (sessionRestoreMask) sessionRestoreMask.style.display = 'none';
             clearSession();
             showLoginScreen();
           }
@@ -257,6 +262,7 @@ async function attemptSessionRestore() {
           // 토큰이 이미 만료되었거나 임박한 상태에서 페이지에 '새로' 진입했다면,
           // 브라우저 팝업 차단(Popup Blocker) 보안에 걸리므로 자동 갱신을 생략하고 깨끗하게 로그인 대기 처리합니다.
           console.log('보관된 세션이 만료되었습니다. 로그인 화면으로 안전하게 초기화합니다.');
+          if (sessionRestoreMask) sessionRestoreMask.style.display = 'none';
           clearSession();
           showLoginScreen();
         }
