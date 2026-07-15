@@ -149,47 +149,99 @@ async function initApp() {
 }
 
 // 저장된 구글 로그인 세션 자동 복원
+let sessionRefreshInterval = null;
+
+// 세션 주기 갱신 타이머 가동 (background silent refresh)
+function startSessionRefreshTimer() {
+  if (sessionRefreshInterval) {
+    clearInterval(sessionRefreshInterval);
+  }
+  
+  sessionRefreshInterval = setInterval(() => {
+    const acquiredAt = localStorage.getItem('G_TOKEN_ACQUIRED_AT');
+    if (accessToken && acquiredAt) {
+      const elapsed = Date.now() - parseInt(acquiredAt, 10);
+      // 토큰 획득 후 50분 경과 시 백그라운드 무인 갱신(prompt: none) 진행
+      if (elapsed > 50 * 60 * 1000) {
+        console.log('세션 유효 시간이 10분 이하로 남아 백그라운드 무인 갱신을 진행합니다. (prompt: none)');
+        if (tokenClient) {
+          try {
+            tokenClient.requestAccessToken({ prompt: 'none' });
+          } catch (err) {
+            console.error('백그라운드 세션 갱신 요청 에러:', err);
+          }
+        }
+      }
+    }
+  }, 60 * 1000); // 1분마다 유효 여부 점검
+  console.log('세션 자동 갱신 모니터링 타이머 가동 완료');
+}
+
+// 저장된 구글 로그인 세션 자동 복원
 async function attemptSessionRestore() {
   const savedToken = localStorage.getItem('G_ACCESS_TOKEN');
   const savedUser = localStorage.getItem('G_USER_INFO');
   const savedTokenResponse = localStorage.getItem('G_TOKEN_RESPONSE');
+  const acquiredAt = localStorage.getItem('G_TOKEN_ACQUIRED_AT');
   
   if (savedToken && savedUser && savedTokenResponse) {
     console.log('기존 로그인 세션 복원 시도 중...');
     const checkGapi = setInterval(async () => {
       if (gapiInited) {
         clearInterval(checkGapi);
-        try {
-          console.log('GAPI 초기화 완료 확인. 세션 복원 적용 시작.');
-          accessToken = savedToken;
-          currentUser = JSON.parse(savedUser);
-          
-          // GAPI의 공식 사양에 맞게 { access_token: accessToken } 객체 형태로 토큰 직접 전달
-          gapi.client.setToken({ access_token: savedToken });
-          console.log('GAPI setToken 적용 완료 (access_token 매핑)');
-          
-          console.log('캘린더 목록 로드 시도...');
-          await fetchCalendarList();
-          
-          console.log('캘린더 커스텀 색상 로드 시도...');
-          await loadCalendarColorsFromSheet();
-          
-          console.log('삭제된 일정 목록 로드 시도...');
-          await fetchDeletedEvents();
-          
-          console.log('달력 인스턴스 초기화 시도...');
-          initCalendar();
-          
-          hideAuthError();
-          updateProfileUI();
-          showDashboard();
-          
-          console.log('로그인 세션 복원 완료!');
-        } catch (err) {
-          console.error('세션 복원 프로세스 중 심각한 예외 발생:', err);
-          console.warn('세션 복원 실패 (토큰 만료 혹은 API 로드 실패):', err);
-          clearSession();
-          showLoginScreen();
+        
+        const elapsed = acquiredAt ? (Date.now() - parseInt(acquiredAt, 10)) : Infinity;
+        
+        // 토큰 발급 후 50분이 지나지 않았다면 기존 토큰 그대로 즉시 활용
+        if (elapsed < 50 * 60 * 1000) {
+          try {
+            console.log('GAPI 초기화 완료 확인. 세션 복원 적용 시작.');
+            accessToken = savedToken;
+            currentUser = JSON.parse(savedUser);
+            
+            // GAPI의 공식 사양에 맞게 { access_token: accessToken } 객체 형태로 토큰 직접 전달
+            gapi.client.setToken({ access_token: savedToken });
+            console.log('GAPI setToken 적용 완료 (access_token 매핑)');
+            
+            console.log('캘린더 목록 로드 시도...');
+            await fetchCalendarList();
+            
+            console.log('캘린더 커스텀 색상 로드 시도...');
+            await loadCalendarColorsFromSheet();
+            
+            console.log('삭제된 일정 목록 로드 시도...');
+            await fetchDeletedEvents();
+            
+            console.log('달력 인스턴스 초기화 시도...');
+            initCalendar();
+            
+            hideAuthError();
+            updateProfileUI();
+            showDashboard();
+            
+            startSessionRefreshTimer(); // 백그라운드 갱신 타이머 가동
+            console.log('로그인 세션 복원 완료!');
+          } catch (err) {
+            console.error('세션 복원 프로세스 중 심각한 예외 발생:', err);
+            clearSession();
+            showLoginScreen();
+          }
+        } else {
+          // 토큰이 이미 만료되었거나 임박했다면 백그라운드 무인 로그인(prompt: none) 시도
+          console.log('보관된 세션이 만료됨. 백그라운드 무인 갱신(prompt: none)을 시도합니다.');
+          if (tokenClient) {
+            try {
+              tokenClient.requestAccessToken({ prompt: 'none' });
+            } catch (err) {
+              console.error('백그라운드 무인 갱신 요청 에러:', err);
+              clearSession();
+              showLoginScreen();
+            }
+          } else {
+            console.warn('tokenClient가 아직 준비되지 않아 복원을 스킵합니다.');
+            clearSession();
+            showLoginScreen();
+          }
         }
       }
     }, 100);
@@ -203,8 +255,13 @@ function clearSession() {
   localStorage.removeItem('G_ACCESS_TOKEN');
   localStorage.removeItem('G_USER_INFO');
   localStorage.removeItem('G_TOKEN_RESPONSE');
+  localStorage.removeItem('G_TOKEN_ACQUIRED_AT');
   accessToken = null;
   currentUser = null;
+  if (sessionRefreshInterval) {
+    clearInterval(sessionRefreshInterval);
+    sessionRefreshInterval = null;
+  }
 }
 
 // 1. API 설정 여부 확인
@@ -273,7 +330,13 @@ function initializeGisClient() {
 // 4. 인증 콜백 핸들러
 async function handleAuthCallback(tokenResponse) {
   if (tokenResponse.error !== undefined) {
-    showAuthError(`로그인 오류: ${tokenResponse.error}`);
+    console.warn('Google Auth Callback Error:', tokenResponse.error);
+    clearSession();
+    showLoginScreen();
+    // 백그라운드 무인 갱신 실패(prompt: none)인 경우 조용히 로그인 화면으로 복귀 처리
+    if (tokenResponse.error !== 'immediate_failed' && tokenResponse.error !== 'interaction_required') {
+      showAuthError(`로그인 오류: ${tokenResponse.error}`);
+    }
     return;
   }
   
@@ -311,6 +374,9 @@ async function handleAuthCallback(tokenResponse) {
     localStorage.setItem('G_ACCESS_TOKEN', accessToken);
     localStorage.setItem('G_USER_INFO', JSON.stringify(currentUser));
     localStorage.setItem('G_TOKEN_RESPONSE', JSON.stringify(tokenResponse));
+    localStorage.setItem('G_TOKEN_ACQUIRED_AT', Date.now().toString());
+    
+    startSessionRefreshTimer(); // 백그라운드 갱신 모니터링 시작
     
     // 다중 캘린더 목록 조회 및 필터 구성
     await fetchCalendarList();
