@@ -151,7 +151,34 @@ async function initApp() {
 // 저장된 구글 로그인 세션 자동 복원
 let sessionRefreshInterval = null;
 
-// 세션 주기 갱신 타이머 가동 (background silent refresh)
+// 세션 연장 토스트 표시 함수 (브라우저 팝업 차단 우회를 위한 사용자 제스처 유도)
+function showSessionExtensionToast() {
+  if (document.getElementById('session-extend-toast')) return;
+  
+  const toast = document.createElement('div');
+  toast.id = 'session-extend-toast';
+  toast.className = 'notifier-toast';
+  toast.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 12px; z-index: 999999; border: 1px solid rgba(255,255,255,0.1);';
+  toast.innerHTML = `
+    <span>⚠️ 구글 로그인 세션 만료 10분 전입니다.</span>
+    <button id="btn-extend-session-now" style="background: var(--color-primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: background 0.2s;">세션 연장</button>
+  `;
+  document.body.appendChild(toast);
+  
+  document.getElementById('btn-extend-session-now').addEventListener('click', () => {
+    console.log('[User Gesture] 세션 연장 버튼 클릭됨. 안전한 토큰 갱신(prompt: none)을 진행합니다.');
+    if (tokenClient) {
+      try {
+        tokenClient.requestAccessToken({ prompt: 'none' });
+      } catch (err) {
+        console.error('사용자 클릭 세션 갱신 실패:', err);
+      }
+    }
+    toast.remove();
+  });
+}
+
+// 세션 주기 갱신 타이머 가동 (1분마다 유효 여부 점검)
 function startSessionRefreshTimer() {
   if (sessionRefreshInterval) {
     clearInterval(sessionRefreshInterval);
@@ -161,19 +188,20 @@ function startSessionRefreshTimer() {
     const acquiredAt = localStorage.getItem('G_TOKEN_ACQUIRED_AT');
     if (accessToken && acquiredAt) {
       const elapsed = Date.now() - parseInt(acquiredAt, 10);
-      // 토큰 획득 후 50분 경과 시 백그라운드 무인 갱신(prompt: none) 진행
-      if (elapsed > 50 * 60 * 1000) {
-        console.log('세션 유효 시간이 10분 이하로 남아 백그라운드 무인 갱신을 진행합니다. (prompt: none)');
-        if (tokenClient) {
-          try {
-            tokenClient.requestAccessToken({ prompt: 'none' });
-          } catch (err) {
-            console.error('백그라운드 세션 갱신 요청 에러:', err);
-          }
-        }
+      
+      // 1. 토큰 획득 후 50분 경과 시 세션 연장 토스트 노출 (팝업 차단 방지용 사용자 클릭 유도)
+      if (elapsed > 50 * 60 * 1000 && elapsed <= 60 * 60 * 1000) {
+        showSessionExtensionToast();
+      }
+      
+      // 2. 토큰 획득 후 1시간 이상 완전히 지나 세션 만료된 경우 로그아웃 처리
+      if (elapsed > 60 * 60 * 1000) {
+        console.warn('세션이 완전히 만료되었습니다. 세션을 초기화하고 로그인 화면으로 전환합니다.');
+        clearSession();
+        showLoginScreen();
       }
     }
-  }, 60 * 1000); // 1분마다 유효 여부 점검
+  }, 30 * 1000); // 30초마다 정밀 점검
   console.log('세션 자동 갱신 모니터링 타이머 가동 완료');
 }
 
@@ -192,14 +220,13 @@ async function attemptSessionRestore() {
         
         const elapsed = acquiredAt ? (Date.now() - parseInt(acquiredAt, 10)) : Infinity;
         
-        // 토큰 발급 후 50분이 지나지 않았다면 기존 토큰 그대로 즉시 활용
+        // 토큰 발급 후 50분이 지나지 않았다면 기존 토큰 그대로 즉시 활용 (이전 로드 방식 그대로 안전 통과)
         if (elapsed < 50 * 60 * 1000) {
           try {
             console.log('GAPI 초기화 완료 확인. 세션 복원 적용 시작.');
             accessToken = savedToken;
             currentUser = JSON.parse(savedUser);
             
-            // GAPI의 공식 사양에 맞게 { access_token: accessToken } 객체 형태로 토큰 직접 전달
             gapi.client.setToken({ access_token: savedToken });
             console.log('GAPI setToken 적용 완료 (access_token 매핑)');
             
@@ -219,7 +246,7 @@ async function attemptSessionRestore() {
             updateProfileUI();
             showDashboard();
             
-            startSessionRefreshTimer(); // 백그라운드 갱신 타이머 가동
+            startSessionRefreshTimer(); // 백그라운드 세션 타이머 가동
             console.log('로그인 세션 복원 완료!');
           } catch (err) {
             console.error('세션 복원 프로세스 중 심각한 예외 발생:', err);
@@ -227,21 +254,11 @@ async function attemptSessionRestore() {
             showLoginScreen();
           }
         } else {
-          // 토큰이 이미 만료되었거나 임박했다면 백그라운드 무인 로그인(prompt: none) 시도
-          console.log('보관된 세션이 만료됨. 백그라운드 무인 갱신(prompt: none)을 시도합니다.');
-          if (tokenClient) {
-            try {
-              tokenClient.requestAccessToken({ prompt: 'none' });
-            } catch (err) {
-              console.error('백그라운드 무인 갱신 요청 에러:', err);
-              clearSession();
-              showLoginScreen();
-            }
-          } else {
-            console.warn('tokenClient가 아직 준비되지 않아 복원을 스킵합니다.');
-            clearSession();
-            showLoginScreen();
-          }
+          // 토큰이 이미 만료되었거나 임박한 상태에서 페이지에 '새로' 진입했다면,
+          // 브라우저 팝업 차단(Popup Blocker) 보안에 걸리므로 자동 갱신을 생략하고 깨끗하게 로그인 대기 처리합니다.
+          console.log('보관된 세션이 만료되었습니다. 로그인 화면으로 안전하게 초기화합니다.');
+          clearSession();
+          showLoginScreen();
         }
       }
     }, 100);
@@ -258,10 +275,14 @@ function clearSession() {
   localStorage.removeItem('G_TOKEN_ACQUIRED_AT');
   accessToken = null;
   currentUser = null;
+  
   if (sessionRefreshInterval) {
     clearInterval(sessionRefreshInterval);
     sessionRefreshInterval = null;
   }
+  
+  const toast = document.getElementById('session-extend-toast');
+  if (toast) toast.remove();
 }
 
 // 1. API 설정 여부 확인
@@ -377,6 +398,9 @@ async function handleAuthCallback(tokenResponse) {
     localStorage.setItem('G_TOKEN_ACQUIRED_AT', Date.now().toString());
     
     startSessionRefreshTimer(); // 백그라운드 갱신 모니터링 시작
+    
+    const toast = document.getElementById('session-extend-toast');
+    if (toast) toast.remove();
     
     // 다중 캘린더 목록 조회 및 필터 구성
     await fetchCalendarList();
