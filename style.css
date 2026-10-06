@@ -1943,3 +1943,19 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
     background: rgba(15, 23, 42, 0.85);
   }
 }
+
+/* 수업 대기 관리 */
+.waitlist-panel { padding: 24px; }
+.waitlist-panel[hidden], .waitlist-panel [hidden] { display: none !important; }
+.waitlist-panel h2, .waitlist-panel h3 { margin-bottom: 12px; }
+.waitlist-panel p { color: var(--text-muted); margin: 8px 0 16px; overflow-wrap: anywhere; }
+.waitlist-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.waitlist-toolbar .form-control { width: auto; flex: 1; min-width: 150px; }
+.waitlist-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; align-items: end; }
+.waitlist-fields label { display: grid; gap: 8px; }
+.waitlist-panel fieldset { padding: 16px; margin: 16px 0; border: 1px solid var(--border-color); border-radius: 8px; }
+.waitlist-panel fieldset label { display: inline-block; margin-right: 16px; }
+.waitlist-match, #wl-form { padding: 20px 0; border-block: 1px solid var(--border-color); margin: 20px 0; }
+.waitlist-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+.waitlist-row p { margin: 6px 0; }
+@media (max-width: 600px) { .waitlist-panel { padding: 16px; } .waitlist-row { align-items: flex-start; } }

@@ -1,3 +1,4 @@
+import { initWaitlist } from './waitlist.js';
 import { CONFIG, saveConfig, loadSecrets, secrets } from './config.js';
 
 // 애플리케이션 상태 관리
@@ -127,6 +128,7 @@ const inpEventColor = document.getElementById('event-color');
 
 // 초기 실행 및 스크립트 로드 대기
 window.addEventListener('DOMContentLoaded', () => {
+  initWaitlist(() => allCalendars);
   initApp();
 });
 
