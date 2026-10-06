@@ -66,3 +66,52 @@ test('start-only mode still requires valid starts and explicit range ends', () =
    assert.throws(()=>validate({...base,timeRanges:JSON.stringify([range])}));
  }
 });
+
+test('specific date searches every coach and combines single and recurring requests', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const records=[{...base,days:'3'}, {...base,id:'b',memberId:'second',coachId:'another',type:'단발',from:'2026-10-07',until:'2026-10-07',created:'2026-10-02'}, {...base,id:'c',memberId:'third',days:'4'}];
+ assert.deepEqual(dateCandidates(records,{date:'2026-10-07',start:'09:00'}).map(r=>r.id),['a','b']);
+});
+test('single dates do not match other dates sharing the same weekday', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const single={...base,type:'단발',from:'2026-10-07',until:'2026-10-07'};
+ assert.equal(dateCandidates([single],{date:'2026-10-07',start:'09:00'}).length,1);
+ assert.equal(dateCandidates([single],{date:'2026-10-14',start:'09:00'}).length,0);
+ assert.equal(dateCandidates([single],{date:'2026-09-30',start:'09:00'}).length,0);
+});
+test('recurring requests honor chosen date, weekday and inclusive period bounds', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const record={...base,days:'3',from:'2026-10-07',until:'2026-10-14'};
+ for(const [date,count] of [['2026-10-07',1],['2026-10-14',1],['2026-10-08',0],['2026-09-30',0],['2026-10-21',0]]) assert.equal(dateCandidates([record],{date,start:'09:00'}).length,count);
+ assert.equal(dateCandidates([{...record,until:''}],{date:'2027-10-06',start:'09:00'}).length,1);
+});
+test('date search respects exact starts, multiple ranges and no end-time requirement', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const record={...base,days:'3',timeRanges:JSON.stringify([{mode:'start',start:'13:00',end:''},{mode:'range',start:'17:00',end:'19:00'}])};
+ for(const [start,count] of [['13:00',1],['13:01',0],['17:00',1],['18:00',1],['19:00',0],['15:00',0]]) assert.equal(dateCandidates([record],{date:'2026-10-07',start}).length,count);
+});
+test('date search excludes completed requests, invalid dates and duplicate members', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const query={date:'2026-10-07',start:'09:00'},record={...base,days:'3'};
+ assert.equal(dateCandidates([record,{...record,id:'b'}],query).length,1);
+ for(const status of ['취소','연결완료']) assert.equal(dateCandidates([{...record,status}],query).length,0);
+ for(const change of [{date:''},{date:'2026-02-30'},{date:'2026-13-01'},{start:'25:00'}]) assert.deepEqual(dateCandidates([record],{...query,...change}),[]);
+});
+
+test('registration and date search accept only whole hours', async () => {
+ const {isWholeHour,dateCandidates}=await import('../waitlist-model.js');
+ for(const hour of ['00:00','01:00','12:00','23:00']) assert.equal(isWholeHour(hour),true);
+ for(const invalid of ['13:30','13:01','24:00','9:00','',null]) assert.equal(isWholeHour(invalid),false);
+ assert.throws(()=>validate({...base,start:'09:30'}));
+ assert.throws(()=>validate({...base,end:'11:30'}));
+ assert.throws(()=>validate({...base,timeRanges:JSON.stringify([{mode:'start',start:'13:30',end:''}])}));
+ assert.deepEqual(dateCandidates([{...base,days:'3',start:'13:00',end:'15:00'}],{date:'2026-10-07',start:'13:30'}),[]);
+});
+test('legacy minute data is read unchanged and is not silently rounded', async () => {
+ const {dateCandidates}=await import('../waitlist-model.js');
+ const legacy={...base,days:'3',start:'13:30',end:'15:30'};
+ assert.deepEqual(decode([encode(legacy)]),[legacy]);
+ assert.equal(dateCandidates([legacy],{date:'2026-10-07',start:'13:00'}).length,0);
+ assert.equal(dateCandidates([legacy],{date:'2026-10-07',start:'14:00'}).length,1);
+ assert.throws(()=>validate(legacy));
+});

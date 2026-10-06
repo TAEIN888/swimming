@@ -1699,4 +1699,5 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
 .waitlist-loading-track { width: 180px; height: 4px; border-radius: 4px; background: var(--color-primary-glow); overflow: hidden; }
 .waitlist-loading-track span { display: block; width: 40%; height: 100%; background: var(--color-primary); border-radius: 4px; animation: waitlist-progress 1.2s ease-in-out infinite; }
 @keyframes waitlist-progress { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
-#wl-match-form { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
+#wl-match-form { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+.waitlist-time-row .waitlist-time-note { grid-column: 1 / -1; font-size: .8rem; color: var(--color-accent); margin: 0; }

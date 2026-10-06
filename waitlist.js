@@ -1,8 +1,9 @@
 import { CONFIG } from './config.js';
-import { DAYS, HEADERS, decode, encode, validate, candidates, getTimeRanges } from './waitlist-model.js';
+import { DAYS, HEADERS, decode, encode, validate, dateCandidates, getTimeRanges, isWholeHour } from './waitlist-model.js';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const newId = () => typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map(n => n.toString(16).padStart(2, '0')).join('');
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+const hourOptions = '<option value="">시간 선택</option>' + Array.from({ length: 24 }, (_, hour) => `<option value="${String(hour).padStart(2, '0')}:00">${hour}시</option>`).join('');
 export function initWaitlist(getCalendars) {
   const button = document.createElement('button');
   button.className = 'tab-btn'; button.id = 'tab-waitlist'; button.innerHTML = '<i class="fa-solid fa-user-clock" aria-hidden="true"></i> 수업 대기 관리';
@@ -31,7 +32,7 @@ export function initWaitlist(getCalendars) {
       <fieldset class="waitlist-group"><legend><i class="fa-regular fa-note-sticky" aria-hidden="true"></i> 메모</legend><label class="waitlist-note-label">특이사항<textarea name="memo" class="form-control" rows="2" maxlength="2000" placeholder="연락 시 참고할 내용이나 수업 관련 요청"></textarea></label></fieldset>
       <div class="waitlist-form-actions"><button class="btn btn-secondary" type="button" id="wl-cancel">닫기</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> 저장</button></div>
     </form>
-    <section class="waitlist-match"><h3><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 빈 수업에 맞는 대기 회원 찾기</h3><form id="wl-match-form" class="waitlist-fields"><label>강사<select name="coachId" class="form-control" required></select></label><label>수업 날짜<input name="date" type="date" class="form-control" required></label><label>시작시간<input name="start" type="time" class="form-control" required></label><label>종료시간<input name="end" type="time" class="form-control" required></label><button class="btn btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 후보 조회</button></form><p class="waitlist-help">희망 조건에 맞는 회원을 등록 순서로 표시합니다. 연락 전 실제 참석 가능 여부와 기존 수업 중복을 확인해주세요. 날짜·시간은 한국 시간 기준입니다.</p><div id="wl-candidates" aria-live="polite"></div></section>
+    <section class="waitlist-match"><h3><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 빈 수업에 맞는 대기 회원 찾기</h3><form id="wl-match-form" class="waitlist-fields"><label>조회 날짜<input name="date" type="date" class="form-control" required></label><label>시작시간<select name="start" class="form-control" required>${hourOptions}</select></label><button class="btn btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 후보 조회</button></form><p class="waitlist-help">선택한 날짜와 정각 시작시간에 맞는 단발·장기 대기를 모든 강사에 걸쳐 조회합니다. 단발은 지정 날짜, 장기는 기간과 요일을 확인합니다. 시간 범위로 등록한 대기는 조회 시작시간이 범위 안에 있으면 표시합니다.</p><div id="wl-candidates" aria-live="polite"></div></section>
     <div class="waitlist-list-heading"><h3><i class="fa-solid fa-list" aria-hidden="true"></i> 대기 목록</h3><span id="wl-count"></span></div><div id="wl-list"></div>`;
   const backdrop = document.createElement('div');
   backdrop.id = 'wl-backdrop'; backdrop.className = 'modal-backdrop'; backdrop.hidden = true;
@@ -84,8 +85,8 @@ export function initWaitlist(getCalendars) {
     loading = true; ready = false; message(''); setLoading(true);
     try {
       await ensureSheet(); records = await read();
-      fillCoaches(matchForm.elements.coachId, false);
       if (!matchForm.elements.date.value) matchForm.elements.date.value = today();
+
       render(); message('대기 목록을 불러왔습니다.');
       try {
         const response = await api().values.get({ spreadsheetId: CONFIG.getSpreadsheetId(), range: "'회원목록'!A2:I" });
@@ -118,15 +119,19 @@ export function initWaitlist(getCalendars) {
   }
   function syncTimeMode() {
     const startOnly = field('timeMode').value === 'start';
-    $('wl-time-help').textContent = startOnly ? '입력한 시작시간과 정확히 같은 시각에 시작하는 수업을 추천합니다. 종료시간은 지정하지 않습니다.' : '수업 전체가 가능한 시간 범위를 입력해주세요. 선택한 날짜 또는 요일에 적용됩니다.';
+    $('wl-time-help').textContent = startOnly ? '선택한 정각과 정확히 같은 시각에 시작하는 수업을 추천합니다. 종료시간은 지정하지 않습니다.' : '수업 전체가 가능한 시간 범위를 입력해주세요. 선택한 날짜 또는 요일에 적용됩니다.';
     $('wl-time-ranges').classList.toggle('start-only', startOnly);
     $('wl-time-ranges').querySelectorAll('.waitlist-range-end, .waitlist-time-separator').forEach(el => { el.hidden = startOnly; });
     $('wl-time-ranges').querySelectorAll('[name=rangeEnd]').forEach(el => { el.disabled = startOnly; el.required = !startOnly; });
   }
   function addTimeRange(range = { start: '', end: '' }) {
     const row = document.createElement('div'); row.className = 'waitlist-time-row';
-    row.innerHTML = `<span class="waitlist-time-number"></span><label>시작시간<input name="rangeStart" type="time" class="form-control" required></label><span class="waitlist-time-separator" aria-hidden="true">~</span><label class="waitlist-range-end">종료시간<input name="rangeEnd" type="time" class="form-control" required></label><button type="button" class="btn btn-secondary" data-remove-time title="시간대 삭제" aria-label="시간대 삭제"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>`;
-    row.querySelector('[name=rangeStart]').value = range.start; row.querySelector('[name=rangeEnd]').value = range.end;
+    row.innerHTML = `<span class="waitlist-time-number"></span><label>시작시간<select name="rangeStart" class="form-control" required>${hourOptions}</select></label><span class="waitlist-time-separator" aria-hidden="true">~</span><label class="waitlist-range-end">종료시간<select name="rangeEnd" class="form-control" required>${hourOptions}</select></label><button type="button" class="btn btn-secondary" data-remove-time title="시간대 삭제" aria-label="시간대 삭제"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>`;
+    row.querySelector('[name=rangeStart]').value = isWholeHour(range.start) ? range.start : '';
+    row.querySelector('[name=rangeEnd]').value = isWholeHour(range.end) ? range.end : '';
+    if ((range.start && !isWholeHour(range.start)) || (range.mode !== 'start' && range.end && !isWholeHour(range.end))) {
+      row.insertAdjacentHTML('beforeend', `<p class="waitlist-time-note">기존 시간: ${escape(range.start)}${range.end ? ` ~ ${escape(range.end)}` : ''}. 저장하려면 정각을 다시 선택해주세요.</p>`);
+    }
     $('wl-time-ranges').append(row); numberTimeRanges(); syncTimeMode(); return row;
   }
   function numberTimeRanges() {
@@ -137,7 +142,7 @@ export function initWaitlist(getCalendars) {
       remove.setAttribute('aria-label', `시간대 ${index + 1} 삭제`);
     });
   }
-  $('wl-add-time').onclick = () => addTimeRange().querySelector('input').focus();
+  $('wl-add-time').onclick = () => addTimeRange().querySelector('select').focus();
   $('wl-time-ranges').onclick = event => {
     const remove = event.target.closest('[data-remove-time]');
     if (remove && !remove.disabled) { remove.closest('.waitlist-time-row').remove(); numberTimeRanges(); }
@@ -210,11 +215,10 @@ export function initWaitlist(getCalendars) {
   matchForm.addEventListener('submit', async event => {
     event.preventDefault(); if (busy || !ready) return;
     const slot = Object.fromEntries(new FormData(matchForm));
-    if (slot.end <= slot.start) { message('수업 종료시간은 시작시간보다 늦어야 합니다. 당일 수업을 조회해주세요.'); return; }
     busy = true; matchForm.querySelector('button').disabled = true;
     try {
-      records = await read(); render(); const found = candidates(records, slot);
-      $('wl-candidates').innerHTML = found.length ? found.map((r,i) => `<article class="waitlist-row"><div><strong>${i + 1}. ${escape(r.name)}</strong> ${escape(r.phone)}<p>${escape(summary(r))}</p><p>${escape(r.memo)}</p></div></article>`).join('') : '<p>조건에 맞는 대기 회원이 없습니다.</p>';
+      records = await read(); render(); const found = dateCandidates(records, slot);
+      $('wl-candidates').innerHTML = found.length ? found.map((r,i) => `<article class="waitlist-row"><div><strong>${i + 1}. ${escape(r.name)}</strong> ${escape(r.phone)}<p>${escape(summary(r))}</p><p>${escape(r.type)} 대기 · 조회 날짜: ${escape(slot.date)}</p><p>${escape(r.memo)}</p></div></article>`).join('') : '<p>조건에 맞는 대기 회원이 없습니다.</p>';
       message(`${found.length}명의 후보를 찾았습니다. 등록 순서 기준이며 자동 예약되지 않습니다.`);
     } catch (error) { $('wl-candidates').textContent = ''; message(error.message || '후보 조회에 실패했습니다.'); }
     finally { busy = false; matchForm.querySelector('button').disabled = false; }
@@ -227,14 +231,14 @@ export function initWaitlist(getCalendars) {
   }
   button.onclick = show;
   document.querySelector('.tab-menu').addEventListener('click', event => { const tab = event.target.closest('.tab-btn'); if (tab && tab !== button && tab.id !== 'btn-sidebar-desktop-toggle') { panel.hidden = true; button.classList.remove('active'); } });
-  const recommend = document.createElement('button'); recommend.type = 'button'; recommend.className = 'btn btn-secondary'; recommend.innerHTML = '<i class="fa-solid fa-user-clock" aria-hidden="true"></i> 이 시간의 대기 회원 찾기';
+  const recommend = document.createElement('button'); recommend.type = 'button'; recommend.className = 'btn btn-secondary'; recommend.innerHTML = '<i class="fa-solid fa-user-clock" aria-hidden="true"></i> 이 날짜·시간의 대기 회원 찾기';
   document.getElementById('event-form').append(recommend);
   recommend.onclick = async () => {
-    const date = document.getElementById('event-start-date').value, endDate = document.getElementById('event-end-date').value;
-    if (date !== endDate) { alert('대기 추천은 당일 수업에 대해 조회할 수 있습니다.'); return; }
-    const slot = { coachId: document.getElementById('event-calendar-id').value, date, start: document.getElementById('event-start-time').value, end: document.getElementById('event-end-time').value };
+    const slot = { date: document.getElementById('event-start-date').value, start: document.getElementById('event-start-time').value };
+    if (!slot.date || !slot.start) { alert('수업 시작 날짜와 시간을 먼저 입력해주세요.'); return; }
     document.getElementById('event-backdrop').classList.remove('active'); await show();
     for (const [key,value] of Object.entries(slot)) matchForm.elements.namedItem(key).value = value;
-    if (ready) matchForm.requestSubmit();
+    if (ready && isWholeHour(slot.start)) matchForm.requestSubmit();
+    else if (ready) message('이 수업은 분 단위로 시작합니다. 조회할 정각을 선택해주세요.');
   };
 }
