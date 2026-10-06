@@ -1701,3 +1701,13 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
 @keyframes waitlist-progress { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 #wl-match-form { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
 .waitlist-time-row .waitlist-time-note { grid-column: 1 / -1; font-size: .8rem; color: var(--color-accent); margin: 0; }
+
+/* 대기 목록은 고정 높이 안에서 스크롤하고 빈 수업 검색은 아래에 배치 */
+.waitlist-results { height: 75vh; display: flex; flex-direction: column; }
+.waitlist-results .waitlist-list-heading { flex-shrink: 0; }
+.waitlist-results-body { position: relative; flex: 1; min-height: 0; }
+#wl-list { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 8px; }
+.waitlist-results-body .waitlist-loading { position: absolute; inset: 0; justify-content: center; }
+#wl-list::-webkit-scrollbar { width: 6px; }
+#wl-list::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .15); border-radius: 6px; }
+#wl-list::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, .3); }

@@ -13,7 +13,7 @@ export function initWaitlist(getCalendars) {
   document.getElementById('calendar-view-card').before(panel);
   panel.innerHTML = `<div class="waitlist-header"><h3><i class="fa-solid fa-user-clock" aria-hidden="true"></i> 수업 대기 관리</h3><button type="button" class="btn btn-primary" id="wl-new"><i class="fa-solid fa-plus" aria-hidden="true"></i> 대기 등록</button></div>
     <div class="waitlist-toolbar"><input class="form-control" id="wl-search" placeholder="이름 또는 연락처 입력 검색…" aria-label="대기 회원 검색"><select class="form-control" id="wl-filter" aria-label="대기 상태"><option>대기</option><option>연결완료</option><option>취소</option><option>전체</option></select><button type="button" class="btn btn-secondary" id="wl-refresh" title="새로고침"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i><span>새로고침</span></button></div>
-    <p id="wl-message" role="status" aria-live="polite"></p><div id="wl-loading" class="waitlist-loading" hidden role="status" aria-label="대기 목록 조회 중"><div class="spinner-container"><div class="double-bounce1"></div><div class="double-bounce2"></div></div><div class="waitlist-loading-track"><span></span></div></div>
+    <p id="wl-message" role="status" aria-live="polite"></p>
     <form id="wl-form" hidden><p class="waitlist-help">회원의 희망 조건과 수업이 가능한 시간을 등록해주세요.</p><p id="wl-form-message" role="status" aria-live="polite"></p>
       <fieldset class="waitlist-group"><legend><i class="fa-solid fa-user" aria-hidden="true"></i> 회원정보</legend><div class="waitlist-fields waitlist-member-fields">
         <label>등록 회원<select name="memberId" class="form-control"><option value="">직접 입력</option></select></label>
@@ -32,8 +32,9 @@ export function initWaitlist(getCalendars) {
       <fieldset class="waitlist-group"><legend><i class="fa-regular fa-note-sticky" aria-hidden="true"></i> 메모</legend><label class="waitlist-note-label">특이사항<textarea name="memo" class="form-control" rows="2" maxlength="2000" placeholder="연락 시 참고할 내용이나 수업 관련 요청"></textarea></label></fieldset>
       <div class="waitlist-form-actions"><button class="btn btn-secondary" type="button" id="wl-cancel">닫기</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> 저장</button></div>
     </form>
+    <section class="waitlist-results" aria-labelledby="wl-list-title"><div class="waitlist-list-heading"><h3 id="wl-list-title"><i class="fa-solid fa-list" aria-hidden="true"></i> 대기 목록</h3><span id="wl-count"></span></div><div class="waitlist-results-body"><div id="wl-loading" class="waitlist-loading" hidden role="status" aria-label="대기 목록 조회 중"><div class="spinner-container"><div class="double-bounce1"></div><div class="double-bounce2"></div></div><div class="waitlist-loading-track"><span></span></div></div><div id="wl-list" role="region" aria-labelledby="wl-list-title" tabindex="0"></div></div></section>
     <section class="waitlist-match"><h3><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 빈 수업에 맞는 대기 회원 찾기</h3><form id="wl-match-form" class="waitlist-fields"><label>조회 날짜<input name="date" type="date" class="form-control" required></label><label>시작시간<select name="start" class="form-control" required>${hourOptions}</select></label><button class="btn btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 후보 조회</button></form><p class="waitlist-help">선택한 날짜와 정각 시작시간에 맞는 단발·장기 대기를 모든 강사에 걸쳐 조회합니다. 단발은 지정 날짜, 장기는 기간과 요일을 확인합니다. 시간 범위로 등록한 대기는 조회 시작시간이 범위 안에 있으면 표시합니다.</p><div id="wl-candidates" aria-live="polite"></div></section>
-    <div class="waitlist-list-heading"><h3><i class="fa-solid fa-list" aria-hidden="true"></i> 대기 목록</h3><span id="wl-count"></span></div><div id="wl-list"></div>`;
+    `;
   const backdrop = document.createElement('div');
   backdrop.id = 'wl-backdrop'; backdrop.className = 'modal-backdrop'; backdrop.hidden = true;
   backdrop.innerHTML = `<div class="modal waitlist-dialog" role="dialog" aria-modal="true" aria-labelledby="wl-title"><div class="modal-header"><h3 class="modal-title"><i class="fa-solid fa-user-clock" aria-hidden="true"></i> <span id="wl-title">대기 등록</span></h3><button type="button" class="close-btn" id="wl-close" aria-label="대기 등록 닫기">&times;</button></div></div>`;
@@ -238,6 +239,7 @@ export function initWaitlist(getCalendars) {
     if (!slot.date || !slot.start) { alert('수업 시작 날짜와 시간을 먼저 입력해주세요.'); return; }
     document.getElementById('event-backdrop').classList.remove('active'); await show();
     for (const [key,value] of Object.entries(slot)) matchForm.elements.namedItem(key).value = value;
+    matchForm.closest('.waitlist-match').scrollIntoView({ block: 'start' });
     if (ready && isWholeHour(slot.start)) matchForm.requestSubmit();
     else if (ready) message('이 수업은 분 단위로 시작합니다. 조회할 정각을 선택해주세요.');
   };
