@@ -32,7 +32,7 @@ export function initWaitlist(getCalendars) {
       <fieldset class="waitlist-group"><legend><i class="fa-regular fa-note-sticky" aria-hidden="true"></i> 메모</legend><label class="waitlist-note-label">특이사항<textarea name="memo" class="form-control" rows="2" maxlength="2000" placeholder="연락 시 참고할 내용이나 수업 관련 요청"></textarea></label></fieldset>
       <div class="waitlist-form-actions"><button class="btn btn-secondary" type="button" id="wl-cancel">닫기</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> 저장</button></div>
     </form>
-    <section class="waitlist-results" aria-labelledby="wl-list-title"><div class="waitlist-list-heading"><h3 id="wl-list-title"><i class="fa-solid fa-list" aria-hidden="true"></i> 대기 목록</h3><span id="wl-count"></span></div><div class="waitlist-results-body"><div id="wl-loading" class="waitlist-loading" hidden role="status" aria-label="대기 목록 조회 중"><div class="spinner-container"><div class="double-bounce1"></div><div class="double-bounce2"></div></div><div class="waitlist-loading-track"><span></span></div></div><div id="wl-list" role="region" aria-labelledby="wl-list-title" tabindex="0"></div></div></section>
+    <section class="waitlist-results" aria-labelledby="wl-list-title"><div class="waitlist-list-heading"><h3 id="wl-list-title"><i class="fa-solid fa-list" aria-hidden="true"></i> 대기 목록</h3><div class="waitlist-list-actions"><button type="button" class="btn btn-secondary" id="wl-jump-match"><i class="fa-solid fa-arrow-down" aria-hidden="true"></i> 빈 수업 후보 찾기로 이동</button><span id="wl-count"></span></div></div><div class="waitlist-results-body"><div id="wl-loading" class="waitlist-loading" hidden role="status" aria-label="대기 목록 조회 중"><div class="spinner-container"><div class="double-bounce1"></div><div class="double-bounce2"></div></div><div class="waitlist-loading-track"><span></span></div></div><div id="wl-list" role="region" aria-labelledby="wl-list-title" tabindex="0"></div></div></section>
     <section class="waitlist-match"><h3><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 빈 수업에 맞는 대기 회원 찾기</h3><form id="wl-match-form" class="waitlist-fields"><label>조회 날짜<input name="date" type="date" class="form-control" required></label><label>시작시간<select name="start" class="form-control" required>${hourOptions}</select></label><button class="btn btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 후보 조회</button></form><p class="waitlist-help">선택한 날짜와 정각 시작시간에 맞는 단발·장기 대기를 모든 강사에 걸쳐 조회합니다. 단발은 지정 날짜, 장기는 기간과 요일을 확인합니다. 시간 범위로 등록한 대기는 조회 시작시간이 범위 안에 있으면 표시합니다.</p><div id="wl-candidates" aria-live="polite"></div></section>
     `;
   const backdrop = document.createElement('div');
@@ -42,6 +42,10 @@ export function initWaitlist(getCalendars) {
   const $ = id => panel.querySelector(`#${id}`) || backdrop.querySelector(`#${id}`);
   const form = $('wl-form'), matchForm = $('wl-match-form');
   const field = name => form.elements.namedItem(name);
+  $('wl-jump-match').onclick = () => {
+    matchForm.closest('.waitlist-match').scrollIntoView({ block: 'start' });
+    matchForm.elements.date.focus({ preventScroll: true });
+  };
   let records = [], members = [], editing = null, ready = false, busy = false, loading = false, returnFocus = null;
   const message = text => { $('wl-message').textContent = text; $('wl-form-message').textContent = text; };
   function closeEditor() {

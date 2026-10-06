@@ -1706,7 +1706,8 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
 .waitlist-results { height: 75vh; display: flex; flex-direction: column; }
 .waitlist-results .waitlist-list-heading { flex-shrink: 0; }
 .waitlist-results-body { position: relative; flex: 1; min-height: 0; }
-#wl-list { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 8px; }
+#wl-list { height: 100%; overflow-y: auto; overscroll-behavior-y: auto; scrollbar-gutter: stable; padding-right: 8px; }
+.waitlist-list-actions { display: flex; align-items: center; gap: 16px; }
 .waitlist-results-body .waitlist-loading { position: absolute; inset: 0; justify-content: center; }
 #wl-list::-webkit-scrollbar { width: 6px; }
 #wl-list::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .15); border-radius: 6px; }
