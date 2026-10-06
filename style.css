@@ -1067,316 +1067,6 @@ body {
   font-size: 0.78rem;
 }
 
-/* 모바일 헤더 기본 스타일 (데스크톱에서는 숨김) */
-.mobile-header {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-color);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  z-index: 999;
-}
-
-.mobile-toggle-btn {
-  background: none;
-  border: none;
-  color: var(--text-main);
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mobile-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mobile-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1.5px solid var(--color-primary);
-}
-
-.mobile-title {
-  font-family: var(--font-title);
-  font-weight: 800;
-  font-size: 1.15rem;
-  color: var(--text-main);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* 모바일 닫기 버튼 기본 스타일 */
-.mobile-close-btn {
-  display: none;
-  background: rgba(15, 23, 42, 0.05);
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: var(--text-main);
-  font-size: 1rem;
-  cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-}
-
-.mobile-close-btn:hover {
-  background: rgba(15, 23, 42, 0.1);
-  transform: scale(1.05);
-}
-
-/* 사이드바 백드롭 (모바일에서 사이드바 열릴 때 뒷배경) */
-.sidebar-backdrop {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.3);
-  backdrop-filter: blur(4px);
-  z-index: 1009;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.sidebar-backdrop.active {
-  display: block;
-  opacity: 1;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .mobile-header {
-    display: flex;
-  }
-  
-  .app-container {
-    flex-direction: column;
-    padding-top: 60px; /* 모바일 헤더 높이만큼 띄움 */
-    height: 100vh;
-    overflow-y: auto;
-  }
-  
-  /* 사이드바를 슬라이드 메뉴 형태로 변경 */
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: -280px; /* 화면 밖으로 */
-    width: 280px;
-    height: 100vh;
-    border-right: 1px solid var(--border-color);
-    border-bottom: none;
-    z-index: 1010;
-    box-shadow: 12px 0 30px rgba(15, 23, 42, 0.1);
-    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    display: flex !important; /* flex 강제 */
-  }
-  
-  .sidebar.active {
-    left: 0; /* 슬라이드 인 */
-  }
-  
-  .sidebar-menu {
-    display: block !important; /* 모바일에서도 노출 */
-  }
-  
-  .brand-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
-  
-  .mobile-close-btn {
-    display: flex;
-  }
-  
-  .main-content {
-    padding: 1rem;
-    width: 100%;
-    overflow-x: hidden;
-  }
-  
-  /* 탭 메뉴 가로 스크롤 대응 */
-  .tab-menu {
-    display: flex;
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-    padding: 0.25rem 0.25rem 0.5rem 0.25rem;
-    gap: 8px;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    width: 100%;
-  }
-  
-  .tab-menu::-webkit-scrollbar {
-    height: 4px;
-  }
-  
-  .tab-menu::-webkit-scrollbar-thumb {
-    background: rgba(15, 23, 42, 0.1);
-    border-radius: 10px;
-  }
-  
-  .tab-btn {
-    padding: 0.5rem 0.88rem;
-    font-size: 0.85rem;
-    flex-shrink: 0; /* 찌그러지지 않도록 */
-  }
-  
-  /* 통계 카드 1열 */
-  .stats-row {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-  
-  .stat-card {
-    padding: 1rem;
-  }
-  
-  /* 테이블 모바일 카드화 (members-table & retention-table) */
-  .members-table, .members-table thead, .members-table tbody, .members-table th, .members-table td, .members-table tr,
-  .retention-table, .retention-table thead, .retention-table tbody, .retention-table th, .retention-table td, .retention-table tr {
-    display: block;
-  }
-  
-  .members-table thead, .retention-table thead {
-    display: none; /* 헤더 숨김 */
-  }
-  
-  .members-table tr, .retention-table tr {
-    margin-bottom: 1rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(10px);
-    padding: 0.75rem;
-    box-shadow: 0 4px 6px rgba(15, 23, 42, 0.01);
-  }
-  
-  .members-table td, .retention-table td {
-    border: none;
-    position: relative;
-    padding-left: 40% !important;
-    text-align: right !important;
-    padding: 8px 12px !important;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.04);
-    font-size: 0.85rem;
-  }
-  
-  .members-table td:last-child, .retention-table td:last-child {
-    border-bottom: none;
-  }
-  
-  .members-table td::before, .retention-table td::before {
-    content: attr(data-label);
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 35%;
-    white-space: nowrap;
-    text-align: left;
-    font-weight: 700;
-    color: var(--text-muted);
-  }
-  
-  /* 관리 버튼 등 정렬 처리 */
-  .members-table td.member-table-actions {
-    text-align: center !important;
-    padding-left: 12px !important;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  
-  .members-table td.member-table-actions::before {
-    position: static;
-    transform: none;
-    width: auto;
-    margin-right: auto;
-  }
-  
-  /* 메모 컬럼은 길어지므로 가독성 대응 */
-  .member-table-memo {
-    text-align: left !important;
-    padding-left: 40% !important;
-    white-space: normal !important;
-    word-break: break-all;
-  }
-  
-  /* FullCalendar 모바일 최적화 */
-  .fc .fc-toolbar {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .fc .fc-toolbar-title {
-    font-size: 1.1rem !important;
-  }
-  
-  .fc .fc-button {
-    padding: 0.35rem 0.6rem !important;
-    font-size: 0.75rem !important;
-  }
-  
-  /* 모달 카드 모바일 최적화 */
-  .modal-card {
-    width: 95% !important;
-    max-height: 90vh !important;
-    margin: 1.5rem auto !important;
-    padding: 1.5rem 1.25rem !important;
-    overflow-y: auto;
-  }
-  
-  .form-row {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  /* 알림 메시지 생성기 결과 카드 */
-  .notifier-card {
-    padding: 1rem !important;
-  }
-  
-  .notifier-card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  
-  .notifier-time-badge {
-    align-self: flex-start;
-  }
-}
-
 /* 로딩 오버레이 스피너 스타일 */
 .loading-overlay {
   position: absolute;
@@ -1944,18 +1634,69 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
   }
 }
 
-/* 수업 대기 관리 */
-.waitlist-panel { padding: 24px; }
-.waitlist-panel[hidden], .waitlist-panel [hidden] { display: none !important; }
-.waitlist-panel h2, .waitlist-panel h3 { margin-bottom: 12px; }
-.waitlist-panel p { color: var(--text-muted); margin: 8px 0 16px; overflow-wrap: anywhere; }
-.waitlist-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
-.waitlist-toolbar .form-control { width: auto; flex: 1; min-width: 150px; }
-.waitlist-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; align-items: end; }
-.waitlist-fields label { display: grid; gap: 8px; }
-.waitlist-panel fieldset { padding: 16px; margin: 16px 0; border: 1px solid var(--border-color); border-radius: 8px; }
-.waitlist-panel fieldset label { display: inline-block; margin-right: 16px; }
-.waitlist-match, #wl-form { padding: 20px 0; border-block: 1px solid var(--border-color); margin: 20px 0; }
-.waitlist-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
-.waitlist-row p { margin: 6px 0; }
-@media (max-width: 600px) { .waitlist-panel { padding: 16px; } .waitlist-row { align-items: flex-start; } }
+/* 수업 대기 관리: 기존 회원 관리 카드와 동일한 테마 */
+:is(.waitlist-panel, .waitlist-dialog) { padding: 24px; min-width: 0; }
+:is(.waitlist-panel, .waitlist-dialog)[hidden], :is(.waitlist-panel, .waitlist-dialog) [hidden] { display: none !important; }
+:is(.waitlist-panel, .waitlist-dialog) h3 { font-family: var(--font-title); font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+:is(.waitlist-panel, .waitlist-dialog) h3 i, .waitlist-group legend i { color: var(--color-primary); }
+:is(.waitlist-panel, .waitlist-dialog) p { color: var(--text-muted); margin: 8px 0 16px; overflow-wrap: anywhere; line-height: 1.65; }
+.waitlist-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); }
+.waitlist-header h3 { font-size: 1.3rem; }
+:is(.waitlist-panel, .waitlist-dialog) .btn { font-size: .88rem; padding: .6rem 1rem; gap: 6px; flex-shrink: 0; }
+.waitlist-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; max-width: 800px; }
+.waitlist-toolbar .form-control { width: auto; min-width: 150px; }
+#wl-search { flex: 1; }
+#wl-filter { min-width: 120px; }
+#wl-message { font-size: .88rem; }
+#wl-form { padding: 0 4px 4px; overflow-y: auto; min-height: 0; }
+.waitlist-group { min-width: 0; padding: 20px; margin: 0 0 20px; background: var(--bg-modal); border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.waitlist-group legend { padding: 0 8px; font-weight: 700; font-size: .95rem; }
+.waitlist-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 12px 0; align-items: end; }
+.waitlist-fields label, .waitlist-note-label { display: flex; flex-direction: column; gap: 8px; font-weight: 500; font-size: .88rem; min-width: 0; }
+.waitlist-fields .form-control, .waitlist-time-row .form-control { min-width: 0; width: 100%; }
+.waitlist-period-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; margin-top: 20px; }
+.waitlist-required { font-size: .7rem; color: var(--color-primary); margin-left: 4px; font-weight: 500; }
+.waitlist-end-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 20px; margin-bottom: 8px; font-size: .88rem; }
+.waitlist-end-heading .waitlist-check { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; cursor: pointer; font-size: .82rem; }
+:is(.waitlist-panel, .waitlist-dialog) input[type=checkbox] { accent-color: var(--color-primary); }
+:is(.waitlist-panel, .waitlist-dialog) .waitlist-help { font-size: .82rem; margin: 8px 0 12px; }
+.waitlist-day-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.waitlist-day-options label { cursor: pointer; }
+.waitlist-day-options input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.waitlist-day-options span { display: flex; align-items: center; justify-content: center; width: 42px; height: 40px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: .88rem; font-weight: 600; color: var(--text-muted); background: var(--bg-modal); }
+.waitlist-day-options input:checked + span { color: var(--color-primary); background: var(--color-primary-glow); border-color: var(--color-primary); }
+.waitlist-day-options input:focus-visible + span { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.waitlist-time-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 16px minmax(0, 1fr) 42px; align-items: end; gap: 12px; padding: 12px 0; }
+.waitlist-time-number { font-size: .82rem; color: var(--text-muted); padding-bottom: 12px; }
+.waitlist-time-row label { display: grid; gap: 8px; font-size: .82rem; color: var(--text-muted); }
+.waitlist-time-separator { text-align: center; padding-bottom: 12px; color: var(--text-muted); }
+.waitlist-time-row .btn { width: 42px; height: 44px; padding: 0; }
+:is(.waitlist-panel, .waitlist-dialog) .btn:disabled { opacity: .4; cursor: default; transform: none; }
+#wl-add-time { margin-top: 8px; color: var(--color-primary); }
+.waitlist-form-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.waitlist-match { padding: 24px 0; border-block: 1px solid var(--border-color); margin: 24px 0; }
+.waitlist-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+#wl-count { font-size: .85rem; font-weight: 600; color: var(--text-muted); }
+.waitlist-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 10px; background: var(--bg-modal); }
+.waitlist-row > div { min-width: 0; overflow-wrap: anywhere; font-size: .88rem; }
+.waitlist-row p { margin: 6px 0 0; font-size: .82rem; }
+.waitlist-status { display: inline-block; border-radius: 6px; padding: 3px 8px; margin-left: 8px; font-size: .75rem; color: var(--color-primary); background: var(--color-primary-glow); }
+
+/* Desktop-only waitlist editor and loading indicator */
+#wl-backdrop[hidden] { display: none; }
+.waitlist-dialog { width: 760px; max-height: 90vh; display: flex; flex-direction: column; }
+.waitlist-dialog .modal-header { flex-shrink: 0; margin-bottom: 16px; }
+.waitlist-dialog .waitlist-group { padding: 16px; margin-bottom: 16px; }
+.waitlist-dialog .waitlist-form-actions { position: sticky; bottom: -4px; padding: 16px 0 4px; background: var(--bg-modal); border-top: 1px solid var(--border-color); }
+.waitlist-dialog .waitlist-help { color: var(--text-muted); }
+#wl-form-message:empty { display: none; }
+#wl-form-message { color: var(--color-accent); font-size: .88rem; margin-bottom: 16px; }
+.waitlist-time-mode { display: flex; gap: 20px; margin: 8px 0 12px; }
+.waitlist-time-mode label { display: flex; gap: 6px; align-items: center; font-size: .88rem; cursor: pointer; }
+.waitlist-time-mode input { accent-color: var(--color-primary); }
+.start-only .waitlist-time-row { grid-template-columns: 70px minmax(0, 1fr) 42px; }
+.waitlist-loading { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 48px; }
+.waitlist-loading-track { width: 180px; height: 4px; border-radius: 4px; background: var(--color-primary-glow); overflow: hidden; }
+.waitlist-loading-track span { display: block; width: 40%; height: 100%; background: var(--color-primary); border-radius: 4px; animation: waitlist-progress 1.2s ease-in-out infinite; }
+@keyframes waitlist-progress { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+#wl-match-form { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
