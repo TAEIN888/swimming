@@ -92,16 +92,16 @@ export function initWaitlist(getCalendars) {
       await ensureSheet(); records = await read();
       if (!matchForm.elements.date.value) matchForm.elements.date.value = today();
 
-      render(); message('대기 목록을 불러왔습니다.');
+      render();
       try {
         const response = await api().values.get({ spreadsheetId: CONFIG.getSpreadsheetId(), range: "'회원목록'!A2:I" });
         members = (response.result.values || []).filter(r => r[0]).map(r => ({ id: r[0], name: r[1], phone: r[5] || '' }));
-      } catch { members = []; message('대기 목록을 불러왔습니다. 회원 목록은 조회할 수 없어 직접 입력으로 등록해주세요.'); }
+      } catch { members = []; message('회원 목록은 조회할 수 없어 직접 입력으로 등록해주세요.'); }
       ready = true;
     } catch (error) { $('wl-list').textContent = ''; message(error.message || '조회 실패: 스프레드시트 접근 권한을 확인해주세요.'); }
     finally { loading = false; setLoading(false); }
   }
-  function summary(r) { return `${r.coachName || '강사 무관'} · ${r.type === '단발' ? r.from : `${r.from} ~ ${r.until || '무기한'} / ${r.days.split(',').map(d => DAYS[d]).join('·')}`} · ${getTimeRangesSafe(r).map(t => t.mode === 'start' ? `${t.start} 시작` : `${t.start} ~ ${t.end}`).join(' / ')}`; }
+  function summary(r) { return `${r.coachName || '강사 무관'} · ${r.type === '단발' ? `${r.from} (${DAYS[new Date(`${r.from}T00:00:00Z`).getUTCDay()]}요일)` : `${r.from} ~ ${r.until || '무기한'} / ${r.days.split(',').map(d => `${DAYS[d]}요일`).join('·')}`} · ${getTimeRangesSafe(r).map(t => t.mode === 'start' ? `${t.start} 시작` : `${t.start} ~ ${t.end}`).join(' / ')}`; }
   function getTimeRangesSafe(record) {
     try { return getTimeRanges(record).filter(r => r && typeof r.start === 'string' && (r.mode === 'start' || typeof r.end === 'string')); } catch { return []; }
   }
@@ -109,7 +109,7 @@ export function initWaitlist(getCalendars) {
     const query = $('wl-search').value.trim(), status = $('wl-filter').value;
     const list = records.filter(r => (status === '전체' || r.status === status) && `${r.name} ${r.phone}`.includes(query));
     $('wl-count').textContent = `${list.length}건`;
-    $('wl-list').innerHTML = list.length ? list.map(r => `<article class="waitlist-row"><div><strong>${escape(r.name)}</strong> ${escape(r.phone)} <span class="waitlist-status">${escape(r.status)}${r.until && r.until < today() ? ' · 기간 만료' : ''}</span><p>${escape(summary(r))}</p><p>${escape(r.memo)}</p></div><button type="button" class="btn btn-secondary" data-edit="${escape(r.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i> 수정</button></article>`).join('') : '<p>해당하는 대기 회원이 없습니다.</p>';
+    $('wl-list').innerHTML = list.length ? list.map(r => `<article class="waitlist-row"><div><strong>${escape(r.name)}</strong> ${escape(r.phone)} <span class="waitlist-status">${escape(r.status)}${r.until && r.until < today() ? ' · 기간 만료' : ''}</span><p>${escape(summary(r))}</p><p>${escape(r.memo)}</p></div><div class="waitlist-row-actions"><button type="button" class="btn btn-secondary" data-edit="${escape(r.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i> 수정</button><button type="button" class="btn btn-secondary" data-delete="${escape(r.id)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> 삭제</button></div></article>`).join('') : '<p>해당하는 대기 회원이 없습니다.</p>';
   }
   let finiteUntil = '';
   function syncType() {
@@ -216,7 +216,23 @@ export function initWaitlist(getCalendars) {
     }
   }); $('wl-refresh').onclick = load;
   $('wl-search').oninput = render; $('wl-filter').onchange = render;
-  $('wl-list').onclick = event => { const target = event.target.closest('[data-edit]'); if (target) edit(records.find(r => r.id === target.dataset.edit)); };
+  $('wl-list').onclick = async event => {
+    if (busy || loading || !ready) return;
+    const target = event.target.closest('[data-edit], [data-delete]');
+    if (!target) return;
+    const record = records.find(r => r.id === (target.dataset.edit || target.dataset.delete));
+    if (!record) return;
+    if (target.hasAttribute('data-edit')) { edit(record); return; }
+    if (!confirm(`${record.name} 회원의 대기를 삭제하시겠습니까? 삭제한 대기는 목록과 후보 조회에서 제외됩니다.`)) return;
+    busy = true; target.disabled = true;
+    try {
+      const latest = await read();
+      if (latest.find(r => r.id === record.id)?.updated !== record.updated) throw new Error('다른 사용자가 변경했습니다. 새로고침 후 다시 삭제해주세요.');
+      await api().values.append({ spreadsheetId: CONFIG.getSpreadsheetId(), range: "'수업대기'!A:Q", valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', resource: { values: [encode({ ...record, status: '삭제', updated: new Date().toISOString() })] } });
+      records = latest.filter(r => r.id !== record.id); render(); $('wl-candidates').textContent = ''; message('삭제되었습니다.');
+    } catch (error) { message(error.message || '삭제에 실패했습니다. 권한과 연결 상태를 확인해주세요.'); }
+    finally { busy = false; target.disabled = false; }
+  };
   matchForm.addEventListener('submit', async event => {
     event.preventDefault(); if (busy || !ready) return;
     const slot = Object.fromEntries(new FormData(matchForm));

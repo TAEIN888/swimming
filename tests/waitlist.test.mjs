@@ -115,3 +115,10 @@ test('legacy minute data is read unchanged and is not silently rounded', async (
  assert.equal(dateCandidates([legacy],{date:'2026-10-07',start:'14:00'}).length,1);
  assert.throws(()=>validate(legacy));
 });
+
+test('deleted requests stay excluded after reloading all revisions', () => {
+ const deleted = {...base,status:'삭제',updated:'v3'};
+ const other = {...base,id:'b',memberId:'other'};
+ assert.deepEqual(decode([encode(base),encode(other),encode({...base,updated:'v2'}),encode(deleted)]),[other]);
+ assert.deepEqual(candidates(decode([encode(base),encode(deleted)]),slot),[]);
+});

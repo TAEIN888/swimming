@@ -4,7 +4,7 @@ export const KEYS = ['id', 'memberId', 'name', 'phone', 'type', 'coachId', 'coac
 export function decode(rows) {
   const latest = new Map();
   rows.forEach(row => { if (row[0]) latest.set(row[0], Object.fromEntries(KEYS.map((key, i) => [key, row[i] || '']))); });
-  return [...latest.values()];
+  return [...latest.values()].filter(record => record.status !== '삭제');
 }
 export function encode(record) { return KEYS.map(key => record[key] || ''); }
 export function isWholeHour(value) { return typeof value === 'string' && /^([01]\d|2[0-3]):00$/.test(value); }

@@ -1712,3 +1712,5 @@ body.lessons-calendar-mode .calendar-checkbox-item.is-other {
 #wl-list::-webkit-scrollbar { width: 6px; }
 #wl-list::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .15); border-radius: 6px; }
 #wl-list::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, .3); }
+
+.waitlist-row-actions { display: flex; gap: 8px; flex-shrink: 0; }
